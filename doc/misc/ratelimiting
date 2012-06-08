@@ -1,0 +1,23 @@
+Notes on rate limiting
+----------------------
+
+The reference for this work is "network applications of Bloom filters"
+by Andrei Broder and Michael Mitzenmacher.
+http://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf
+
+The specific technique for measuring each client's rate is described
+in section 8.1.
+
+Also worth noting is "less hashing, same performance"
+by Adam Kirsch and Michael Mitzenmacher
+http://www.eecs.harvard.edu/~kirsch/pubs/bbbf/esa06.pdf
+which shows that Bloom filters work just as well with a linear
+combination of two independent hashes as they do with multiple
+independent hashes.
+
+------------------------------------------------------
+Written by Tony Finch <fanf2@cam.ac.uk> <dot@dotat.at>
+at the University of Cambridge Computing Service.
+You may do anything with this. It has no warranty.
+http://creativecommons.org/publicdomain/zero/1.0/
+------------------------------------------------------
