@@ -15,7 +15,7 @@ which shows that Bloom filters work just as well with a linear
 combination of two independent hashes as they do with multiple
 independent hashes.
 
-Configuration parameters:
+Configuration parameters are as follows. These are per-view parameters.
 
 ratelimit-table-size number
 ratelimit-hash-count number
