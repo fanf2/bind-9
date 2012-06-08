@@ -48,14 +48,12 @@ docclean manclean maintainer-clean::
 doc man:: ${MANOBJS}
 
 installdirs:
-	$(SHELL) ${top_srcdir}/mkinstalldirs ${DESTDIR}${bindir} \
-	${DESTDIR}${localstatedir}/run ${DESTDIR}${sysconfdir}
+	$(SHELL) ${top_srcdir}/mkinstalldirs ${DESTDIR}${bindir}
 	$(SHELL) ${top_srcdir}/mkinstalldirs ${DESTDIR}${mandir}/man1
 
 install:: isc-config.sh installdirs
 	${INSTALL_SCRIPT} isc-config.sh ${DESTDIR}${bindir}
 	${INSTALL_DATA} ${top_srcdir}/isc-config.sh.1 ${DESTDIR}${mandir}/man1
-	${INSTALL_DATA} ${top_srcdir}/bind.keys ${DESTDIR}${sysconfdir}
 
 tags:
 	rm -f TAGS
