@@ -15,6 +15,16 @@ which shows that Bloom filters work just as well with a linear
 combination of two independent hashes as they do with multiple
 independent hashes.
 
+Parameters:
+
+Bloom filter size
+Number of hashes
+Cleaning interval
+Truncate limit
+Drop limit
+
+Calculate ageing parameter from limit and interval.
+
 ------------------------------------------------------
 Written by Tony Finch <fanf2@cam.ac.uk> <dot@dotat.at>
 at the University of Cambridge Computing Service.
