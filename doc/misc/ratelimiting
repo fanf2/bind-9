@@ -15,15 +15,16 @@ which shows that Bloom filters work just as well with a linear
 combination of two independent hashes as they do with multiple
 independent hashes.
 
-Parameters:
+Configuration parameters:
 
-Bloom filter size
-Number of hashes
-Cleaning interval
-Truncate limit
-Drop limit
+ratelimit-table-size number
+ratelimit-hash-count number
+ratelimit-log number
+ratelimit-truncate number
+ratelimit-drop number
 
-Calculate ageing parameter from limit and interval.
+Cleaning interval is a fixed value
+Calculate ageing parameter from limits and interval.
 
 ------------------------------------------------------
 Written by Tony Finch <fanf2@cam.ac.uk> <dot@dotat.at>
