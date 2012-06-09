@@ -18,13 +18,43 @@
 #include <isc/bloomrate.h>
 #include <isc/lang.h>
 #include <isc/magic.h>
-#include <isc/mutex.h>
-#include <isc/refcount.h>
+#include <isc/mem.h>
 #include <isc/types.h>
 
+#define BR_MEMSIZE(size) (sizeof(isc_uint32_t) * (size-1) + sizeof(isc_bloomrate_t))
+#define BR_TABSIZE(size) (sizeof(isc_uint32_t) * (size))
 
 isc_result_t
 isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
-		     isc_timermgr_t *timermgr, isc_task_t *task,
-		     isc_bloomrate_t **br) {
+		     isc_mem_t *mctx, isc_task_t *task, isc_timermgr_t *timermgr,
+		     isc_bloomrate_t **brp) {
+	isc_bloomrate_t *br = NULL;
+
+	br = isc_mem_get(mctx, MR_MEMSIZE(size));
+	if (br == NULL)
+		return (ISC_R_NOMEMORY);
+
+	br->mctx = NULL;
+	isc_mem_attach(mctx, &br->mctx);
+
+	/* fanf: timer things */
+
+	br->magic = ISC_BLOOMRATE_MAGIC;
+	br->size = size;
+	br->hashes = hashes;
+	memset(br->table, 0, BR_TABSIZE(size));
+
+	*brp = br;
+	return (ISC_R_SUCCESS);
+}
+
+void
+isc_bloomrate_destroy(isc_bloomrate_t *br) {
+	isc_mem_t *mctx;
+
+	/* fanf: timer things */
+
+	mctx = br->mctx;
+	isc_mem_put(mctx, br, BR_MEMSIZE(br->size));
+	isc_mem_detach(&mctx);
 }

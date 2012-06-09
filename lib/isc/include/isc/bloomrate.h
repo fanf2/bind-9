@@ -64,8 +64,7 @@ ISC_LANG_BEGINDECLS
 
 struct isc_bloomrate {
 	unsigned int		magic;
-	/* fanf: need a task and/or a timer? */
-	isc_mutex_t		lock;	/*%< Not sure if we need this? */
+	isc_mem_t *		mctx;	/*%< Used when destroying */
 	isc_uint32_t		hashes;	/*%< Number of times to hash */
 	isc_uint32_t		size;	/*%< Number of buckets in table */
 	isc_uint32_t		table[1];
@@ -73,14 +72,17 @@ struct isc_bloomrate {
 
 isc_result_t
 isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
-		     isc_timermgr_t *timermgr, isc_task_t *task,
-		     isc_bloomrate_t **br);
+		     isc_mem_t *mctx, isc_task_t *task, isc_timermgr_t *timermgr,
+		     isc_bloomrate_t **brp);
 /*%<
  * Create a new rate measurement Bloom filter.
  *
  * The bloomrate object requires periodic cleaning, performed by a
  * timer managed by the given timermgr within the given task.
  */
+
+void
+isc_bloomrate_destroy(isc_bloomrate_t *br);
 
 ISC_LANG_ENDDECLS
 
