@@ -10,7 +10,10 @@ ratelimit-truncate number
 ratelimit-drop number
 
 Cleaning interval is a fixed value
-Calculate ageing parameter from limits and interval.
+Calculate ageing parameter from limits and interval?
+
+The rate measurement code is in isc/bloomrate.[ch] and the limits are
+handled by bin/named.
 
 TODO
 

@@ -1,3 +1,7 @@
+This version of BIND has been modified by Tony Finch at the University
+of Cambridge Computing Service to add per-client query rate limiting.
+See doc/misc/ratelimiting for details.
+
 BIND 9
 
 	BIND version 9 is a major rewrite of nearly all aspects of the
