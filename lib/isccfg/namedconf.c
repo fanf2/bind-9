@@ -1292,11 +1292,11 @@ view_clauses[] = {
 	   CFG_CLAUSEFLAG_NOTCONFIGURED },
 #endif
 	{ "response-policy", &cfg_type_rpz, 0 },
-	{ "ratelimit-table-size", &cfg_type_uint32, 0 },
-	{ "ratelimit-hash-count", &cfg_type_uint32, 0 },
-	{ "ratelimit-log", &cfg_type_uint32, 0 },
-	{ "ratelimit-truncate", &cfg_type_uint32, 0 },
-	{ "ratelimit-drop", &cfg_type_uint32, 0 },
+	{ "query-rate-table-size", &cfg_type_uint32, 0 },
+	{ "query-rate-hash-count", &cfg_type_uint32, 0 },
+	{ "query-rate-log", &cfg_type_uint32, 0 },
+	{ "query-rate-truncate", &cfg_type_uint32, 0 },
+	{ "query-rate-drop", &cfg_type_uint32, 0 },
 
 	{ NULL, NULL, 0 }
 };

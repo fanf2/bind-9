@@ -1,24 +1,41 @@
 Notes on rate limiting
 ----------------------
 
-Configuration parameters are as follows. These are per-view parameters.
+This feature provides per-client query rate limiting. You can
+configure the following countermeasures to fast querying clients:
 
-ratelimit-table-size number
-ratelimit-hash-count number
-ratelimit-log number
-ratelimit-truncate number
-ratelimit-drop number
+* Just log when the client passes a threshold
+* Truncate responses to the client when it is above a threshold
+* Drop queries from the client when it is above a threshold
 
-Cleaning interval is a fixed value
-Calculate ageing parameter from limits and interval?
+The following per-view configuration parameters are available:
+
+For setting the countermeasure thresholds:
+
+query-rate-log number
+query-rate-truncate number
+query-rate-drop number
+
+For sizing the state table:
+
+query-rate-table-size number
+query-rate-hash-count number
+
+I am not currently sure how to set these parameters which is why they
+are configurable. I think the table size should be something like the
+hash count multiplied by the number of over-threshold clients you
+expect. The hash count should be scaled according to your sensitivity
+to false positives, e.g. 10 gives a fpr of 2^-10. Ish. I need to check
+the sums. (Perhaps in the final code the hash count can be fixed.)
+
+There is a fixed measurement interval of five seconds, which is
+roughly how quickly the server will detect an over-limit client. The
+server retains some memory of past behaviour: there is a fixed
+attenuation factor of 0.75 between intervals, which means that after a
+minute a client's previous behaviour is almost completely forgotten.
 
 The rate measurement code is in isc/bloomrate.[ch] and the limits are
 handled by bin/named.
-
-TODO
-
-per-view stats
-per-countermeasure stats
 
 ------------------------------------------------------
 Written by Tony Finch <fanf2@cam.ac.uk> <dot@dotat.at>

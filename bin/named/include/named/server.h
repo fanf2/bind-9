@@ -165,9 +165,11 @@ enum {
 	dns_nsstatscounter_updatefail = 34,
 	dns_nsstatscounter_updatebadprereq = 35,
 
-	dns_nsstatscounter_ratelimited = 36,
+	dns_nsstatscounter_bloomrate_log = 36,
+	dns_nsstatscounter_bloomrate_trunc = 37,
+	dns_nsstatscounter_bloomrate_drop = 38,
 
-	dns_nsstatscounter_max = 37
+	dns_nsstatscounter_max = 39
 };
 
 void
