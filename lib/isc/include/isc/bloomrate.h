@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) 2012 Tony Finch <dot@dotat.at> <fanf2@cam.ac.uk>
  * Copyright (C) 2012 The University of Cambridge
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -53,15 +54,34 @@
  */
 
 #include <isc/lang.h>
+#include <isc/mutex.h>
+#include <isc/types.h>
 
 ISC_LANG_BEGINDECLS
 
+#define ISC_BLOOMRATE_MAGIC	ISC_MAGIC('B', 'l', 'o', 'o')
+#define ISC_BLOOMRATE_VALID(br)	ISC_MAGIC_VALID(br, ISC_BLOOMRATE_MAGIC)
+
 struct isc_bloomrate {
-	isc_uint32_t br_size;
-	isc_uint32_t br_hashes;
-	isc_uint32_t br_random;
-	isc_uint32_t *br_table;
+	unsigned int		magic;
+	/* fanf: need a task and/or a timer? */
+	isc_mutex_t		lock;	/*%< Not sure if we need this? */
+	isc_uint32_t		random;	/*%< For salting the hashes */
+	isc_uint32_t		hashes;	/*%< Number of times to hash */
+	isc_uint32_t		size;	/*%< Number of buckets in table */
+	isc_uint32_t		table[1];
 };
+
+isc_result_t
+isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
+		     isc_timermgr_t *timermgr, isc_task_t *task,
+		     isc_bloomrate_t **br);
+/*%<
+ * Create a new rate measurement Bloom filter.
+ *
+ * The bloomrate object requires periodic cleaning, performed by a
+ * timer managed by the given timermgr within the given task.
+ */
 
 ISC_LANG_ENDDECLS
 
