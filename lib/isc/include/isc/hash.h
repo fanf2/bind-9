@@ -158,8 +158,14 @@ unsigned int
 isc_hash_ctxcalc(isc_hash_t *hctx, const unsigned char *key,
 		 unsigned int keylen, isc_boolean_t case_sensitive);
 unsigned int
+isc_hash_ctxcalc2(isc_hash_t *hctx, const unsigned char *key,
+		  unsigned int keylen, isc_boolean_t case_sensitive);
+unsigned int
 isc_hash_calc(const unsigned char *key, unsigned int keylen,
 	      isc_boolean_t case_sensitive);
+unsigned int
+isc_hash_calc2(const unsigned char *key, unsigned int keylen,
+	       isc_boolean_t case_sensitive);
 /*!<
  * \brief Calculate a hash value.
  *
@@ -168,6 +174,9 @@ isc_hash_calc(const unsigned char *key, unsigned int keylen,
  *
  * isc_hash_init() is for the single-context mode.  A valid module-internal
  * hash object must have been created.
+ *
+ * The secondary versions are for when two independent hash values are
+ * required for the same data.
  *
  * 'key' is the hash key, which is a variable length buffer.
  *

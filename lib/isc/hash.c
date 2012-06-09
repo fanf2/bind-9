@@ -158,14 +158,14 @@ isc_hash_ctxcreate(isc_mem_t *mctx, isc_entropy_t *entropy,
 	 */
 	overflow_limit =
 		1 << (((sizeof(hash_accum_t) - sizeof(hash_random_t))) * 8);
-	if (overflow_limit < (limit + 1) * 0xff)
+	if (overflow_limit < (limit + 2) * 0xff)
 		return (ISC_R_RANGE);
 
 	hctx = isc_mem_get(mctx, sizeof(isc_hash_t));
 	if (hctx == NULL)
 		return (ISC_R_NOMEMORY);
 
-	vlen = sizeof(hash_random_t) * (limit + 1);
+	vlen = sizeof(hash_random_t) * (limit + 2);
 	rv = isc_mem_get(mctx, vlen);
 	if (rv == NULL) {
 		result = ISC_R_NOMEMORY;
@@ -360,7 +360,7 @@ isc_hash_destroy() {
 
 static inline unsigned int
 hash_calc(isc_hash_t *hctx, const unsigned char *key, unsigned int keylen,
-	  isc_boolean_t case_sensitive)
+	  isc_boolean_t secondary, isc_boolean_t case_sensitive)
 {
 	hash_accum_t partial_sum = 0;
 	hash_random_t *p = hctx->rndvector;
@@ -370,11 +370,14 @@ hash_calc(isc_hash_t *hctx, const unsigned char *key, unsigned int keylen,
 	if (hctx->initialized == ISC_FALSE)
 		isc_hash_ctxinit(hctx);
 
+	if (secondary)
+		partial_sum = (hash_accum_t)p[i++];
+
 	if (case_sensitive) {
-		for (i = 0; i < keylen; i++)
+		for (; i < keylen; i++)
 			partial_sum += key[i] * (hash_accum_t)p[i];
 	} else {
-		for (i = 0; i < keylen; i++)
+		for (; i < keylen; i++)
 			partial_sum += maptolower[key[i]] * (hash_accum_t)p[i];
 	}
 
@@ -390,7 +393,17 @@ isc_hash_ctxcalc(isc_hash_t *hctx, const unsigned char *key,
 	REQUIRE(hctx != NULL && VALID_HASH(hctx));
 	REQUIRE(keylen <= hctx->limit);
 
-	return (hash_calc(hctx, key, keylen, case_sensitive));
+	return (hash_calc(hctx, key, keylen, ISC_FALSE, case_sensitive));
+}
+
+unsigned int
+isc_hash_ctxcalc2(isc_hash_t *hctx, const unsigned char *key,
+		  unsigned int keylen, isc_boolean_t case_sensitive)
+{
+	REQUIRE(hctx != NULL && VALID_HASH(hctx));
+	REQUIRE(keylen <= hctx->limit);
+
+	return (hash_calc(hctx, key, keylen, ISC_TRUE, case_sensitive));
 }
 
 unsigned int
@@ -400,5 +413,15 @@ isc_hash_calc(const unsigned char *key, unsigned int keylen,
 	INSIST(hash != NULL && VALID_HASH(hash));
 	REQUIRE(keylen <= hash->limit);
 
-	return (hash_calc(hash, key, keylen, case_sensitive));
+	return (hash_calc(hash, key, keylen, ISC_FALSE, case_sensitive));
+}
+
+unsigned int
+isc_hash_calc2(const unsigned char *key, unsigned int keylen,
+	       isc_boolean_t case_sensitive)
+{
+	INSIST(hash != NULL && VALID_HASH(hash));
+	REQUIRE(keylen <= hash->limit);
+
+	return (hash_calc(hash, key, keylen, ISC_TRUE, case_sensitive));
 }
