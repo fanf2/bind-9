@@ -198,6 +198,8 @@ init_desc(void) {
 	SET_NSSTATDESC(updatebadprereq,
 		       "updates rejected due to prerequisite failure",
 		       "UpdateBadPrereq");
+	SET_NSSTATDESC(ratelimited, "queries restricted by rate limiter",
+		       "QryRateLimited");
 	INSIST(i == dns_nsstatscounter_max);
 
 	/* Initialize resolver statistics */

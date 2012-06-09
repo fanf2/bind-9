@@ -216,6 +216,9 @@ query_error(ns_client_t *client, isc_result_t result, int line) {
 	case DNS_R_FORMERR:
 		inc_stats(client, dns_nsstatscounter_formerr);
 		break;
+	case DNS_R_RATELIMITED:
+		inc_stats(client, dns_nsstatscounter_ratelimited);
+		break;
 	default:
 		inc_stats(client, dns_nsstatscounter_failure);
 		break;
