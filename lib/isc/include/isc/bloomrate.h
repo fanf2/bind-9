@@ -65,6 +65,7 @@ ISC_LANG_BEGINDECLS
 struct isc_bloomrate {
 	unsigned int		magic;
 	isc_mem_t *		mctx;	/*%< Used when destroying */
+	isc_timer_t *		timer;	/*%< For aging past data */
 	isc_uint32_t		hashes;	/*%< Number of times to hash */
 	isc_uint32_t		size;	/*%< Number of buckets in table */
 	isc_uint32_t		table[1];
@@ -82,12 +83,19 @@ isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
  */
 
 void
-isc_bloomrate_destroy(isc_bloomrate_t *br);
+isc_bloomrate_destroy(isc_bloomrate_t **br);
+/*%<
+ * Destroy a rate measurement Bloom filter.
+ */
 
 isc_uint32_t
 isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sa, isc_uint32_t inc);
+/*%<
+ * Record an event for the given client, and return its current rate.
+ * The increment is the size of the event, e.g. packet size.
+ */
 
-#define isc_bloomrate_inc(br, sa) isc_bloomrate_add(br, sa, 1)
+#define isc_bloomrate_bump(br, sa) isc_bloomrate_add(br, sa, 1)
 
 ISC_LANG_ENDDECLS
 

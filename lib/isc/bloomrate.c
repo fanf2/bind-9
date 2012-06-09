@@ -15,10 +15,14 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <string.h>
+
 #include <isc/bloomrate.h>
 #include <isc/lang.h>
 #include <isc/magic.h>
 #include <isc/mem.h>
+#include <isc/time.h>
+#include <isc/timer.h>
 #include <isc/types.h>
 
 /*%
@@ -29,9 +33,9 @@
 
 /*%
  * The attenuation factor determines how quickly we forget a client's
- * past behaviour.
+ * past behaviour. (Take care not to overflow!)
  */
-#define BR_ATTENUATE(x) ((x)*3/4)
+#define BR_ATTENUATE(x) ((x)/2 + (x)/4)
 
 /*%
  * The value stored in a hash bucket needs to be adjusted to get the
@@ -40,54 +44,34 @@
 #define BR_RATE(x) (((x) - BR_ATTENUATE(x)) / BR_INTERVAL)
 
 /*%
- * Memory calculations.
+ * Periodic aging job.
  */
-#define BR_MEMSIZE(size) (sizeof(isc_uint32_t) * (size-1) + sizeof(isc_bloomrate_t))
-#define BR_TABSIZE(size) (sizeof(isc_uint32_t) * (size))
+static void
+bloomrate_tick(isc_task_t *task, isc_event_t *event) {
+	isc_bloomrate_t *br;
+	isc_uint32_t *t, i, m;
 
-isc_result_t
-isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
-		     isc_mem_t *mctx, isc_task_t *task, isc_timermgr_t *timermgr,
-		     isc_bloomrate_t **brp) {
-	isc_bloomrate_t *br = NULL;
+	UNUSED(task);
 
-	br = isc_mem_get(mctx, MR_MEMSIZE(size));
-	if (br == NULL)
-		return (ISC_R_NOMEMORY);
+	br = (isc_bloomrate_t *)event->ev_arg;
+	isc_event_free(&event);
 
-	br->mctx = NULL;
-	isc_mem_attach(mctx, &br->mctx);
+	REQUIRE(ISC_BLOOMRATE_VALID(br));
 
-	/* fanf: timer things */
-
-	br->magic = ISC_BLOOMRATE_MAGIC;
-	br->size = size;
-	br->hashes = hashes;
-	memset(br->table, 0, BR_TABSIZE(size));
-
-	*brp = br;
-	return (ISC_R_SUCCESS);
-}
-
-void
-isc_bloomrate_destroy(isc_bloomrate_t *br) {
-	isc_mem_t *mctx;
-
-	/* fanf: timer things */
-
-	mctx = br->mctx;
-	isc_mem_put(mctx, br, BR_MEMSIZE(br->size));
-	isc_mem_detach(&mctx);
+	m = br->size;
+	t = br->table;
+	for (i = 0; i < m; i++)
+		t[i] = BR_ATTENUATE(t[i]);
 }
 
 isc_uint32_t
-isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sockaddr, isc_uint32_t inc) {
-	unsigned int h1, h2, h, i, n, m;
-	isc_uint32_t *t;
-	isc_uint32_t min;
+isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sa, isc_uint32_t inc) {
+	isc_uint32_t *t, h1, h2, h, i, n, m, min;
 
-	h1 = isc_sockaddr_hashnet(sockaddr, ISC_FALSE);
-	h2 = isc_sockaddr_hashnet(sockaddr, ISC_TRUE);
+	REQUIRE(ISC_BLOOMRATE_VALID(br));
+
+	h1 = isc_sockaddr_hashnet(sa, ISC_FALSE);
+	h2 = isc_sockaddr_hashnet(sa, ISC_TRUE);
 	n = br->hashes;
 	m = br->size;
 	t = br->table;
@@ -110,4 +94,58 @@ isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sockaddr, isc_uint32_t in
 			t[h] = min;
 
 	return (BR_RATE(min));
+}
+
+/*%
+ * Memory calculations.
+ */
+#define BR_MEMSIZE(size) (sizeof(isc_uint32_t) * (size-1) + sizeof(isc_bloomrate_t))
+#define BR_TABSIZE(size) (sizeof(isc_uint32_t) * (size))
+
+isc_result_t
+isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
+		     isc_mem_t *mctx, isc_task_t *task, isc_timermgr_t *timermgr,
+		     isc_bloomrate_t **brp) {
+	isc_bloomrate_t *br = NULL;
+	isc_interval_t interval;
+	isc_result_t result;
+
+	br = isc_mem_get(mctx, BR_MEMSIZE(size));
+	if (br == NULL)
+		return (ISC_R_NOMEMORY);
+
+	br->magic = ISC_BLOOMRATE_MAGIC;
+	br->mctx = NULL;
+	isc_mem_attach(mctx, &br->mctx);
+	br->timer = NULL;
+	br->hashes = hashes;
+	br->size = size;
+	memset(br->table, 0, BR_TABSIZE(size));
+
+	isc_interval_set(&interval, BR_INTERVAL, 0);
+	result = isc_timer_create(timermgr, isc_timertype_ticker,
+				  NULL, &interval,
+				  task, bloomrate_tick, (void *)br,
+				  &br->timer);
+	if (result != ISC_R_SUCCESS)
+		goto free_mem;
+
+	*brp = br;
+	return (ISC_R_SUCCESS);
+
+free_mem:
+	isc_mem_put(mctx, br, BR_MEMSIZE(size));
+	return (result);
+}
+
+void
+isc_bloomrate_destroy(isc_bloomrate_t **brp) {
+	isc_bloomrate_t *br = *brp;
+	isc_mem_t *mctx;
+
+	isc_timer_detach(&br->timer);
+	mctx = br->mctx;
+	isc_mem_put(mctx, br, BR_MEMSIZE(br->size));
+	isc_mem_detach(&mctx);
+	*brp = NULL;
 }
