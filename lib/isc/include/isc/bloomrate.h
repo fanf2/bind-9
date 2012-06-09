@@ -14,12 +14,12 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef ISC_BLOOMLIMIT_H
-#define ISC_BLOOMLIMIT_H 1
+#ifndef ISC_BLOOMRATE_H
+#define ISC_BLOOMRATE_H 1
 
-/*! \file isc/bloomlimit.h
+/*! \file isc/bloomrate.h
  * \brief
- * Rate limit clients using a Bloom filter
+ * Measure per-client query rates using a Bloom filter
  *
  * We store clients' query rate measurements in a hash table which is
  * accessed like a Bloom filter, except that rather than being a
@@ -56,13 +56,13 @@
 
 ISC_LANG_BEGINDECLS
 
-struct isc_bloomlimit {
-	isc_uint32_t bl_size;
-	isc_uint32_t bl_hashes;
-	isc_uint32_t bl_random;
-	isc_uint32_t *bl_table;
+struct isc_bloomrate {
+	isc_uint32_t br_size;
+	isc_uint32_t br_hashes;
+	isc_uint32_t br_random;
+	isc_uint32_t *br_table;
 };
 
 ISC_LANG_ENDDECLS
 
-#endif /* ISC_BLOOMLIMIT_H */
+#endif /* ISC_BLOOMRATE_H */
