@@ -200,8 +200,9 @@ isc_sockaddr_format(const isc_sockaddr_t *sa, char *array, unsigned int size) {
 	}
 }
 
-unsigned int
-isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only) {
+static unsigned int
+sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only,
+	      isc_boolean_t network, isc_boolean_t secondary) {
 	unsigned int length = 0;
 	const unsigned char *s = NULL;
 	unsigned int h = 0;
@@ -216,15 +217,21 @@ isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only) {
 		s = (const unsigned char *)&sockaddr->type.sin.sin_addr;
 		p = ntohs(sockaddr->type.sin.sin_port);
 		length = sizeof(sockaddr->type.sin.sin_addr.s_addr);
+		if (network)
+			length = length * 3/4;
 		break;
 	case AF_INET6:
 		in6 = &sockaddr->type.sin6.sin6_addr;
 		if (IN6_IS_ADDR_V4MAPPED(in6)) {
 			s = (const unsigned char *)&in6[12];
 			length = sizeof(sockaddr->type.sin.sin_addr.s_addr);
+			if (network)
+				length = length * 3/4;
 		} else {
 			s = (const unsigned char *)in6;
 			length = sizeof(sockaddr->type.sin6.sin6_addr);
+			if (network)
+				length /= 2;
 		}
 		p = ntohs(sockaddr->type.sin6.sin6_port);
 		break;
@@ -240,7 +247,10 @@ isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only) {
 		p = 0;
 	}
 
-	h = isc_hash_calc(s, length, ISC_TRUE);
+	if (secondary)
+		h = isc_hash_calc2(s, length, ISC_TRUE);
+	else
+		h = isc_hash_calc(s, length, ISC_TRUE);
 	if (!address_only) {
 		g = isc_hash_calc((const unsigned char *)&p, sizeof(p),
 				  ISC_TRUE);
@@ -248,6 +258,16 @@ isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only) {
 	}
 
 	return (h);
+}
+
+unsigned int
+isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only) {
+	return (sockaddr_hash(sockaddr, address_only, ISC_FALSE, ISC_FALSE));
+}
+
+unsigned int
+isc_sockaddr_hashnet(const isc_sockaddr_t *sockaddr, isc_boolean_t secondary) {
+	return (sockaddr_hash(sockaddr, ISC_TRUE, ISC_TRUE, secondary));
 }
 
 void

@@ -97,6 +97,15 @@ isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only);
  * value as the equivalent IPv4 address.
  */
 
+unsigned int
+isc_sockaddr_hashnet(const isc_sockaddr_t *sockaddr, isc_boolean_t secondary);
+/*%<
+ * Return a hash value for the network part of the socket address 'sockaddr'.
+ * If 'secondary' is true then an alternative hash value is returned.
+ *
+ * The prefix length is arbitrarily chosen to be /24 for IPv4 and /64 for IPv6.
+ */
+
 void
 isc_sockaddr_any(isc_sockaddr_t *sockaddr);
 /*%<
