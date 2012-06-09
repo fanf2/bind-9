@@ -84,6 +84,11 @@ isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
 void
 isc_bloomrate_destroy(isc_bloomrate_t *br);
 
+isc_uint32_t
+isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sa, isc_uint32_t inc);
+
+#define isc_bloomrate_inc(br, sa) isc_bloomrate_add(br, sa, 1)
+
 ISC_LANG_ENDDECLS
 
 #endif /* ISC_BLOOMRATE_H */

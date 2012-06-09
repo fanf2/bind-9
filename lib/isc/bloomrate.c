@@ -21,6 +21,27 @@
 #include <isc/mem.h>
 #include <isc/types.h>
 
+/*%
+ * We set a fixed interval for the periodic aging job.
+ * This is fairly small so we catch rate spikes quickly.
+ */
+#define BR_INTERVAL 5
+
+/*%
+ * The attenuation factor determines how quickly we forget a client's
+ * past behaviour.
+ */
+#define BR_ATTENUATE(x) ((x)*3/4)
+
+/*%
+ * The value stored in a hash bucket needs to be adjusted to get the
+ * client's actual rate. See bloomrate.h.
+ */
+#define BR_RATE(x) (((x) - BR_ATTENUATE(x)) / BR_INTERVAL)
+
+/*%
+ * Memory calculations.
+ */
 #define BR_MEMSIZE(size) (sizeof(isc_uint32_t) * (size-1) + sizeof(isc_bloomrate_t))
 #define BR_TABSIZE(size) (sizeof(isc_uint32_t) * (size))
 
@@ -57,4 +78,36 @@ isc_bloomrate_destroy(isc_bloomrate_t *br) {
 	mctx = br->mctx;
 	isc_mem_put(mctx, br, BR_MEMSIZE(br->size));
 	isc_mem_detach(&mctx);
+}
+
+isc_uint32_t
+isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sockaddr, isc_uint32_t inc) {
+	unsigned int h1, h2, h, i, n, m;
+	isc_uint32_t *t;
+	isc_uint32_t min;
+
+	h1 = isc_sockaddr_hashnet(sockaddr, ISC_FALSE);
+	h2 = isc_sockaddr_hashnet(sockaddr, ISC_TRUE);
+	n = br->hashes;
+	m = br->size;
+	t = br->table;
+
+	/* client's rate is the smallest bucket */
+	min = ISC_UINT32_MAX;
+	for (h = h1 % m, i = 0; i < n; i++, h = (h + h2) % m)
+		if (t[h] < min)
+			min = t[h];
+
+	/* careful about overflow */
+	if (min < ISC_UINT32_MAX - inc)
+		min += inc;
+	else
+		min = ISC_UINT32_MAX;
+
+	/* conservative update */
+	for (h = h1 % m, i = 0; i < n; i++, h = (h + h2) % m)
+		if (t[h] < min)
+			t[h] = min;
+
+	return (BR_RATE(min));
 }
