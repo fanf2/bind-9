@@ -31,12 +31,12 @@
  * buckets.
  *
  * There is a periodic task to age old data out of the hash table.
- * Every p seconds all the buckets are multiplied by an aging factor
- * 0 <= a < 1. If a client is querying at a constant rate r the
+ * Every p seconds all the buckets are multiplied by an attenuation
+ * factor 0 <= a < 1. If a client is querying at a constant rate r the
  * measured value from the hash table r' comes from the sum of the
  * resulting geometric progression, which is p * r / (1 - a). So to
- * calculate the client's actual rate from the value in the hash table,
- * r = r' * (1 - a) / p.
+ * calculate the client's actual rate from the value in the hash
+ * table, r = r' * (1 - a) / p.
  *
  * The reference for this code is "network applications of Bloom filters"
  * by Andrei Broder and Michael Mitzenmacher.
