@@ -21,3 +21,10 @@
 #include <isc/mutex.h>
 #include <isc/refcount.h>
 #include <isc/types.h>
+
+
+isc_result_t
+isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
+		     isc_timermgr_t *timermgr, isc_task_t *task,
+		     isc_bloomrate_t **br) {
+}

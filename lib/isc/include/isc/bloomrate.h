@@ -66,7 +66,6 @@ struct isc_bloomrate {
 	unsigned int		magic;
 	/* fanf: need a task and/or a timer? */
 	isc_mutex_t		lock;	/*%< Not sure if we need this? */
-	isc_uint32_t		random;	/*%< For salting the hashes */
 	isc_uint32_t		hashes;	/*%< Number of times to hash */
 	isc_uint32_t		size;	/*%< Number of buckets in table */
 	isc_uint32_t		table[1];
