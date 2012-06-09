@@ -26,6 +26,11 @@ ratelimit-drop number
 Cleaning interval is a fixed value
 Calculate ageing parameter from limits and interval.
 
+TODO
+
+per-view stats
+per-countermeasure stats
+
 ------------------------------------------------------
 Written by Tony Finch <fanf2@cam.ac.uk> <dot@dotat.at>
 at the University of Cambridge Computing Service.
