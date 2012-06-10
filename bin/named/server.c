@@ -2567,10 +2567,12 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 		bloomrate_hashes = cfg_obj_asuint32(obj);
 	if (bloomrate_size != 0 && bloomrate_hashes != 0) {
 		isc_bloomrate_t *br = NULL;
-		result = isc_bloomrate_create(bloomrate_size,
+		CHECK(isc_bloomrate_create(bloomrate_size,
 					      bloomrate_hashes,
 					      ns_g_mctx, ns_g_timermgr,
-					      ns_g_taskmgr, &br);
+					   ns_g_taskmgr, &br));
+		dns_view_setqueryrates(view, br);
+		isc_bloomrate_detach(&br);
 		obj = NULL;
 		result = ns_config_get(maps, "query-rate-log", &obj);
 		if (result == ISC_R_SUCCESS)
