@@ -22,6 +22,7 @@
 #include <isc/magic.h>
 #include <isc/mem.h>
 #include <isc/sockaddr.h>
+#include <isc/task.h>
 #include <isc/time.h>
 #include <isc/timer.h>
 #include <isc/types.h>

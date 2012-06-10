@@ -2571,12 +2571,15 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 					      bloomrate_hashes,
 					      ns_g_mctx, ns_g_timermgr,
 					      ns_g_taskmgr, &br);
+		obj = NULL;
 		result = ns_config_get(maps, "query-rate-log", &obj);
 		if (result == ISC_R_SUCCESS)
 			view->queryrate_log = cfg_obj_asuint32(obj);
+		obj = NULL;
 		result = ns_config_get(maps, "query-rate-trunc", &obj);
 		if (result == ISC_R_SUCCESS)
 			view->queryrate_trunc = cfg_obj_asuint32(obj);
+		obj = NULL;
 		result = ns_config_get(maps, "query-rate-drop", &obj);
 		if (result == ISC_R_SUCCESS)
 			view->queryrate_drop = cfg_obj_asuint32(obj);
