@@ -62,6 +62,7 @@
 
 #include <stdio.h>
 
+#include <isc/bloomrate.h>
 #include <isc/lang.h>
 #include <isc/magic.h>
 #include <isc/event.h>
@@ -111,6 +112,7 @@ struct dns_view {
 	isc_stats_t *			resstats;
 	dns_stats_t *			resquerystats;
 	isc_boolean_t			cacheshared;
+	isc_bloomrate_t *		queryrates;
 
 	/* Configurable data. */
 	dns_tsig_keyring_t *		statickeys;
@@ -162,6 +164,9 @@ struct dns_view {
 	dns_dns64list_t 		dns64;
 	unsigned int 			dns64cnt;
 	ISC_LIST(dns_rpz_zone_t)	rpz_zones;
+	isc_uint32_t			queryrate_log;
+	isc_uint32_t			queryrate_trunc;
+	isc_uint32_t			queryrate_drop;
 
 	/*
 	 * Configurable data for server use only,
@@ -1001,6 +1006,31 @@ dns_view_getresquerystats(dns_view_t *view, dns_stats_t **statsp);
  * \li	'view' is valid and is not frozen.
  *
  *\li	'statsp' != NULL && '*statsp' != NULL
+ */
+
+void
+dns_view_setqueryrates(dns_view_t *view, isc_bloomrate_t *br);
+/*%<
+ * Set a client rate counter, 'br', for 'view'. Once rate counter is
+ * installed, view will count incoming queries per client.
+ *
+ * Requires:
+ * \li	'view' is valid and is not frozen.
+ *
+ * \li	'br' is a client rate counter created by isc_bloomrate_create().
+ */
+
+void
+dns_view_getqueryrates(dns_view_t *view, isc_bloomrate_t **brp);
+/*%<
+ * Get the client rate counter for 'view'.  If a rate counter is
+ * set '*brp' will be attached to it; otherwise, '*brp' will be
+ * untouched.
+ *
+ * Requires:
+ * \li	'view' is valid and is not frozen.
+ *
+ * \li	'brp' != NULL && '*brp' != NULL
  */
 
 isc_boolean_t

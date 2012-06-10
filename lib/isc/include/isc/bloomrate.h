@@ -42,13 +42,13 @@ isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
 void
 isc_bloomrate_attach(isc_bloomrate_t *source, isc_bloomrate_t **target);
 /*%<
- * Attach to a client rate measurer.
+ * Attach to a client rate counter.
  */
 
 void
 isc_bloomrate_detach(isc_bloomrate_t **brp);
 /*%<
- * Detach from a client rate measurer.
+ * Detach from a client rate counter.
  */
 
 isc_uint32_t

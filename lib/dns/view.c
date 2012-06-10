@@ -21,6 +21,7 @@
 
 #include <config.h>
 
+#include <isc/bloomrate.h>
 #include <isc/file.h>
 #include <isc/hash.h>
 #include <isc/print.h>
@@ -153,6 +154,7 @@ dns_view_create(isc_mem_t *mctx, dns_rdataclass_t rdclass,
 	view->cacheshared = ISC_FALSE;
 	ISC_LIST_INIT(view->dns64);
 	view->dns64cnt = 0;
+	view->queryrates = NULL;
 
 	/*
 	 * Initialize configuration data with default values.
@@ -192,6 +194,9 @@ dns_view_create(isc_mem_t *mctx, dns_rdataclass_t rdclass,
 	view->v4_aaaa = dns_v4_aaaa_ok;
 	view->v4_aaaa_acl = NULL;
 	ISC_LIST_INIT(view->rpz_zones);
+	view->queryrate_log = ISC_UINT32_MAX;
+	view->queryrate_trunc = ISC_UINT32_MAX;
+	view->queryrate_drop = ISC_UINT32_MAX;
 	dns_fixedname_init(&view->dlv_fixed);
 	view->managed_keys = NULL;
 	view->redirect = NULL;
@@ -419,6 +424,8 @@ destroy(dns_view_t *view) {
 		isc_stats_detach(&view->resstats);
 	if (view->resquerystats != NULL)
 		dns_stats_detach(&view->resquerystats);
+	if (view->queryrates != NULL)
+		isc_bloomrate_detach(&view->queryrates);
 	if (view->secroots_priv != NULL)
 		dns_keytable_detach(&view->secroots_priv);
 #ifdef BIND9
@@ -1715,6 +1722,24 @@ dns_view_getresquerystats(dns_view_t *view, dns_stats_t **statsp) {
 
 	if (view->resquerystats != NULL)
 		dns_stats_attach(view->resquerystats, statsp);
+}
+
+void
+dns_view_setqueryrates(dns_view_t *view, isc_bloomrate_t *br) {
+	REQUIRE(DNS_VIEW_VALID(view));
+	REQUIRE(!view->frozen);
+	REQUIRE(view->queryrates == NULL);
+
+	isc_bloomrate_attach(br, &view->queryrates);
+}
+
+void
+dns_view_getqueryrates(dns_view_t *view, isc_bloomrate_t **brp) {
+	REQUIRE(DNS_VIEW_VALID(view));
+	REQUIRE(brp != NULL && *brp == NULL);
+
+	if (view->queryrates != NULL)
+		isc_bloomrate_attach(view->queryrates, brp);
 }
 
 isc_result_t
