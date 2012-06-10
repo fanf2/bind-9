@@ -85,8 +85,9 @@ struct isc_bloomrate {
 	unsigned int		magic;
 	int			refs;
 	isc_mutex_t		lock;
-	isc_mem_t *		mctx;	/*%< Used when destroying */
-	isc_timer_t *		timer;	/*%< For aging past data */
+	isc_mem_t *		mctx;
+	isc_task_t *		task;
+	isc_timer_t *		timer;
 	isc_uint32_t		hashes;	/*%< Number of times to hash */
 	isc_uint32_t		size;	/*%< Number of buckets in table */
 	isc_uint32_t		table[1];
@@ -160,7 +161,7 @@ isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sa, isc_uint32_t inc) {
 isc_result_t
 isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
 		     isc_mem_t *mctx, isc_timermgr_t *timermgr,
-		     isc_task_t *task, isc_bloomrate_t **brp) {
+		     isc_taskmgr_t *taskmgr, isc_bloomrate_t **brp) {
 	isc_bloomrate_t *br = NULL;
 	isc_interval_t interval;
 	isc_result_t result;
@@ -175,6 +176,7 @@ isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
 	br->refs  = 1;
 	br->mctx = NULL;
 	isc_mem_attach(mctx, &br->mctx);
+	br->task = NULL;
 	br->timer = NULL;
 	br->hashes = hashes;
 	br->size = size;
@@ -184,17 +186,23 @@ isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
 	if (result != ISC_R_SUCCESS)
 		goto free_mem;
 
-	isc_interval_set(&interval, BR_INTERVAL, 0);
-	result = isc_timer_create(timermgr, isc_timertype_ticker,
-				  NULL, &interval,
-				  task, bloomrate_tick, (void *)br,
-				  &br->timer);
+	result = isc_task_create(taskmgr, 0, &br->task);
 	if (result != ISC_R_SUCCESS)
 		goto free_mutex;
+
+	isc_interval_set(&interval, BR_INTERVAL, 0);
+	result = isc_timer_create(timermgr, isc_timertype_ticker,
+				  NULL, &interval, br->task,
+				  bloomrate_tick, (void *)br,
+				  &br->timer);
+	if (result != ISC_R_SUCCESS)
+		goto free_task;
 
 	*brp = br;
 	return (ISC_R_SUCCESS);
 
+free_task:
+	isc_task_destroy(&br->task);
 free_mutex:
 	DESTROYLOCK(&br->lock);
 free_mem:
@@ -229,6 +237,7 @@ isc_bloomrate_detach(isc_bloomrate_t **brp) {
 		(void)isc_timer_reset(br->timer, isc_timertype_inactive,
 				      NULL, NULL, ISC_FALSE);
 		isc_timer_detach(&br->timer);
+		isc_task_destroy(&br->task);
 		free_now = ISC_TRUE;
 	}
 	UNLOCK(&br->lock);

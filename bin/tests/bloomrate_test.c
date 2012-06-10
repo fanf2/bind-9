@@ -109,7 +109,7 @@ main(int argc, char *argv[]) {
 		      ISC_R_SUCCESS);
 
 	RUNTIME_CHECK(isc_bloomrate_create(1023, 4,
-					   mctx, timermgr, g_task,
+					   mctx, timermgr, taskmgr,
 					   &br) == ISC_R_SUCCESS);
 
 	isc_interval_set(&tick_interval, 0, 10*1000*1000);

@@ -31,12 +31,13 @@ ISC_LANG_BEGINDECLS
 isc_result_t
 isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
 		     isc_mem_t *mctx, isc_timermgr_t *timermgr,
-		     isc_task_t *task, isc_bloomrate_t **brp);
+		     isc_taskmgr_t *taskmgr, isc_bloomrate_t **brp);
 /*%<
  * Create a new client rate measurement Bloom filter.
  *
  * The bloomrate object requires periodic cleaning, performed by a
- * timer managed by the given timermgr within the given task.
+ * timer managed by the given timermgr in a task managed by the given
+ * taskmgr.
  */
 
 void

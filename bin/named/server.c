@@ -1611,6 +1611,8 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 	isc_boolean_t zero_no_soattl;
 	dns_acl_t *clients = NULL, *mapped = NULL, *excluded = NULL;
 	unsigned int query_timeout;
+	isc_uint32_t bloomrate_size = 0;
+	isc_uint32_t bloomrate_hashes = 0;
 	struct cfg_context *nzctx;
 
 	REQUIRE(DNS_VIEW_VALID(view));
@@ -2547,6 +2549,38 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 		CHECK(configure_view_acl(NULL, ns_g_config,
 					 "allow-update-forwarding", NULL, actx,
 					 ns_g_mctx, &view->upfwdacl));
+
+	obj = NULL;
+	result = ns_config_get(maps, "provide-ixfr", &obj);
+	INSIST(result == ISC_R_SUCCESS);
+
+	/*
+	 * Configure per-client query rate limits
+	 */
+	obj = NULL;
+	result = ns_config_get(maps, "query-rate-table-size", &obj);
+	if (result == ISC_R_SUCCESS)
+		bloomrate_size = cfg_obj_asuint32(obj);
+	obj = NULL;
+	result = ns_config_get(maps, "query-rate-hash-count", &obj);
+	if (result == ISC_R_SUCCESS)
+		bloomrate_hashes = cfg_obj_asuint32(obj);
+	if (bloomrate_size != 0 && bloomrate_hashes != 0) {
+		isc_bloomrate_t *br = NULL;
+		result = isc_bloomrate_create(bloomrate_size,
+					      bloomrate_hashes,
+					      ns_g_mctx, ns_g_timermgr,
+					      ns_g_taskmgr, &br);
+		result = ns_config_get(maps, "query-rate-log", &obj);
+		if (result == ISC_R_SUCCESS)
+			view->queryrate_log = cfg_obj_asuint32(obj);
+		result = ns_config_get(maps, "query-rate-trunc", &obj);
+		if (result == ISC_R_SUCCESS)
+			view->queryrate_trunc = cfg_obj_asuint32(obj);
+		result = ns_config_get(maps, "query-rate-drop", &obj);
+		if (result == ISC_R_SUCCESS)
+			view->queryrate_drop = cfg_obj_asuint32(obj);
+	}
 
 	obj = NULL;
 	result = ns_config_get(maps, "provide-ixfr", &obj);
