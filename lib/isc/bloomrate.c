@@ -103,11 +103,11 @@ bloomrate_tick(isc_task_t *task, isc_event_t *event) {
 	isc_uint32_t *t, i, m;
 
 	br = (isc_bloomrate_t *)event->ev_arg;
+	REQUIRE(ISC_BLOOMRATE_VALID(br));
 
 	UNUSED(task);
 	isc_event_free(&event);
 
-	REQUIRE(ISC_BLOOMRATE_VALID(br));
 	LOCK(&br->lock);
 
 	m = br->size;
@@ -216,6 +216,7 @@ void
 isc_bloomrate_attach(isc_bloomrate_t *source, isc_bloomrate_t **target) {
 	REQUIRE(source != NULL);
 	REQUIRE(target != NULL && *target == NULL);
+	REQUIRE(ISC_BLOOMRATE_VALID(source));
 
 	LOCK(&source->lock);
 	REQUIRE(source->refs > 0);
@@ -230,6 +231,8 @@ isc_bloomrate_detach(isc_bloomrate_t **brp) {
 	isc_bloomrate_t *br = *brp;
 	isc_boolean_t free_now = ISC_FALSE;
 	isc_mem_t *mctx;
+
+	REQUIRE(ISC_BLOOMRATE_VALID(br));
 
 	LOCK(&br->lock);
 	REQUIRE(br->refs > 0);
