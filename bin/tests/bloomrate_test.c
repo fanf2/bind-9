@@ -71,7 +71,7 @@ do_tick(isc_task_t *task, isc_event_t *event) {
 	isc_event_free(&event);
 
 	isc_random_get(&in.s_addr);
-	in.s_addr &= 0x000FF000;
+	in.s_addr &= 0x00F00000;
 
 	bump(&in);
 	bump(&g_in);
@@ -83,6 +83,7 @@ do_close(isc_task_t *task, isc_event_t *event) {
 	UNUSED(event);
 	printf("shutdown\n");
 	isc_timer_detach(&ticker);
+	isc_timer_detach(&closer);
 	isc_app_shutdown();
 }
 
@@ -95,8 +96,6 @@ main(int argc, char *argv[]) {
 	UNUSED(argv);
 
 	isc_app_start();
-
-	printf("init\n");
 
 	RUNTIME_CHECK(isc_mem_create(0, 0, &mctx) == ISC_R_SUCCESS);
 	RUNTIME_CHECK(isc_entropy_create(mctx, &ectx) == ISC_R_SUCCESS);
@@ -113,13 +112,13 @@ main(int argc, char *argv[]) {
 					   mctx, timermgr, g_task,
 					   &br) == ISC_R_SUCCESS);
 
-	isc_interval_set(&tick_interval, 0, 10000000);
+	isc_interval_set(&tick_interval, 0, 10*1000*1000);
 	RUNTIME_CHECK(isc_timer_create(timermgr, isc_timertype_ticker,
 				       NULL, &tick_interval,
 				       g_task, do_tick, NULL,
 				       &ticker) == ISC_R_SUCCESS);
 
-	isc_interval_set(&close_interval, 11, 0);
+	isc_interval_set(&close_interval, 1, 0);
 	RUNTIME_CHECK(isc_timer_create(timermgr, isc_timertype_once,
 				       NULL, &close_interval,
 				       g_task, do_close, NULL,
@@ -127,7 +126,6 @@ main(int argc, char *argv[]) {
 
 	isc_random_get(&g_in.s_addr);
 
-	printf("startup\n");
 	isc_app_run();
 
 	isc_task_destroy(&g_task);

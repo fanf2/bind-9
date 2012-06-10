@@ -57,6 +57,7 @@ XTARGETS =	adb_test@EXEEXT@ \
 		byaddr_test@EXEEXT@ \
 		backtrace_test@EXEEXT@ \
 		backtrace_test_nosymtbl@EXEEXT@ \
+		bloomrate_test@EXEEXT@ \
 		byname_test@EXEEXT@ \
 		compress_test@EXEEXT@ \
 		db_test@EXEEXT@ \
@@ -97,6 +98,7 @@ SRCS =		cfg_test.c ${XSRCS}
 XSRCS =		adb_test.c \
 		byaddr_test.c \
 		backtrace_test.c \
+		bloomrate_test.c \
 		byname_test.c \
 		compress_test.c \
 		db_test.c \
@@ -169,6 +171,10 @@ backtrace_test@EXEEXT@: backtrace_test_nosymtbl@EXEEXT@
 	${LIBTOOL_MODE_LINK} ${PURIFY} ${CC} ${BTTEST_CFLAGS} ${LDFLAGS} \
 	-o $@ backtrace_test.c symtbl.c ${ISCNOSYMLIBS} ${LIBS}
 	rm -f symtbl.c
+
+bloomrate_test@EXEEXT@: bloomrate_test.@O@ ${ISCDEPLIBS} ${DNSDEPLIBS}
+	${LIBTOOL_MODE_LINK} ${PURIFY} ${CC} ${CFLAGS} ${LDFLAGS} -o $@ bloomrate_test.@O@ \
+		${DNSLIBS} ${ISCLIBS} ${LIBS}
 
 nsecify@EXEEXT@: nsecify.@O@ ${ISCDEPLIBS} ${DNSDEPLIBS}
 	${LIBTOOL_MODE_LINK} ${PURIFY} ${CC} ${CFLAGS} ${LDFLAGS} -o $@ nsecify.@O@ \
