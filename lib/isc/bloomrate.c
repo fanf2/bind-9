@@ -24,6 +24,7 @@
 #include <isc/time.h>
 #include <isc/timer.h>
 #include <isc/types.h>
+#include <isc/util.h>
 
 /*%
  * We set a fixed interval for the periodic aging job.
