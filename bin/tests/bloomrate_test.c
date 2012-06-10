@@ -128,10 +128,9 @@ main(int argc, char *argv[]) {
 
 	isc_app_run();
 
+	isc_bloomrate_detach(&br);
+
 	isc_task_destroy(&g_task);
-
-	isc_bloomrate_destroy(&br);
-
 	isc_timermgr_destroy(&timermgr);
 	isc_taskmgr_destroy(&taskmgr);
 
