@@ -103,8 +103,8 @@ isc_bloomrate_add(isc_bloomrate_t *br, isc_sockaddr_t *sa, isc_uint32_t inc) {
 #define BR_TABSIZE(size) (sizeof(isc_uint32_t) * (size))
 
 isc_result_t
-isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes,
-		     isc_mem_t *mctx, isc_task_t *task, isc_timermgr_t *timermgr,
+isc_bloomrate_create(isc_uint32_t size, isc_uint32_t hashes, isc_mem_t *mctx,
+		     isc_timermgr_t *timermgr, isc_task_t *task,
 		     isc_bloomrate_t **brp) {
 	isc_bloomrate_t *br = NULL;
 	isc_interval_t interval;
