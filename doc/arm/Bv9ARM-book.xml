@@ -4783,6 +4783,19 @@ category notify { null; };
 		    </para>
 		  </entry>
 		</row>
+                <row rowsep="0">
+                  <entry colname="1">
+                    <para><command>rate-limit</command></para>
+                  </entry>
+		  <entry colname="2">
+		    <para>
+		      The start of rate limiting at
+		      <command>info</command> severity,
+		      continued rate limiting at the debug 1 level,
+		      and various internal performance data at higher levels.
+		    </para>
+		  </entry>
+		</row>
 	      </tbody>
 	    </tgroup>
 	  </informaltable>
@@ -5313,6 +5326,17 @@ badresp:1,adberr:0,findfail:0,valfail:0]
     <optional> resolver-query-timeout <replaceable>number</replaceable> ; </optional>
     <optional> deny-answer-addresses { <replaceable>address_match_list</replaceable> } <optional> except-from { <replaceable>namelist</replaceable> } </optional>;</optional>
     <optional> deny-answer-aliases { <replaceable>namelist</replaceable> } <optional> except-from { <replaceable>namelist</replaceable> } </optional>;</optional>
+    <optional> rate-limit {
+	responses-per-second <replaceable>number</replaceable> ;
+	<optional> errors-per-second <replaceable>number</replaceable> ; </optional>
+	<optional> window <replaceable>number</replaceable> ; </optional>
+	<optional> log-only <replaceable>yes_or_no</replaceable> ; </optional>
+	<optional> IPv4-prefix-length <replaceable>number</replaceable> ; </optional>
+	<optional> IPv6-prefix-length <replaceable>number</replaceable> ; </optional>
+	<optional> slip <replaceable>number</replaceable> ; </optional>
+	<optional> max-table-size <replaceable>number</replaceable> ; </optional>
+	<optional> min-table-size <replaceable>number</replaceable> ; </optional>
+      } ; </optional>
     <optional> response-policy { <replaceable>zone_name</replaceable> <optional> policy given | disabled | passthru | nxdomain | nodata | cname <replaceable>domain</replaceable> </optional> ; } ; </optional>
 };
 </programlisting>
@@ -9669,6 +9693,127 @@ ns.domain.com.rpz-nsdname   CNAME   .
 48.zz.2.2001.rpz-nsip       CNAME   .
 </programlisting>
         </sect3>
+
+	<sect3>
+	  <title>Rate Limiting</title>
+	  <para>
+	    Excessive UDP identical responses to a DNS client can be discarded
+	    by configuring a
+	    <command>rate-limit</command> clause in an
+	    <command>options</command> statement.
+	    This mechanism keeps BIND 9 from being used
+	    in reflection or amplification denial of service attacks
+	    on distant networks,
+	    as well as protecting BIND 9 itself from some denial of service
+	    attacks.
+	  </para>
+
+	  <para>
+	    Rate limiting works by setting
+	    <command>responses-per-second</command>
+	    to a number of repetitions per second for responses for a given name
+	    and record type from a DNS client.
+	  </para>
+
+	  <para>
+	    Note that <command>responses-per-second</command> is limit on
+	    identical responses instead of a limit on all responses or
+	    even all responses to a single client.
+	    10 identical responses per second is a generous limit except perhaps
+	    when many clients are using a single IP address via network
+	    address translation (NAT).
+	    Even when NAT is involved,
+	    it can be argued that clients using NAT should
+	    be using a small number of caching DNS servers.
+	  </para>
+
+	  <para>
+	    On the other hand, the notion of "identical responses"
+	    and "single DNS client" cannot be simplistic.
+	    All responses to a CDIR block with prefix
+	    length specified with <command>IPv4-prefix-length</command>
+	    (default 24) or <command>IPv6-prefix-length</command>
+	    (default 56) are assumed to come from a single DNS client.
+	  </para>
+
+	  <para>
+	    Requests for all names or types that result in DNS errors such
+	    as SERVFAIL and FORMERR (but not NXDOMAIN) are considered
+	    identical.
+	    This controls attacks using invalid requests or distant,
+	    broken authoritative servers.
+	    By default the limit on errors is the same as the
+	    <command>responses-per-second</command> value,
+	    but it can be set separately with
+	    <command>errors-per-second</command>.
+	  </para>
+
+	  <para>
+	    Rate limiting uses a "credit" or "token bucket" scheme.
+	    Each identical response has a conceptual account
+	    that is given <command>responses-per-second</command> or
+	    <command>errors-per-second</command> credits every second.
+	    A DNS request triggering a response debits the account by one.
+	    Responses are not sent while the account is negative.
+	    The account cannot become more positive than
+	    the per-second limit
+	    or more negative than <command>window</command>
+	    times the per-second limit.
+	    A DNS client that sends requests that are not
+	    answered can penalized for up to <command>window</command> seconds
+	    (default 15).
+	  </para>
+
+	  <para>
+	    Responses generated from local wildcards are counted and limited
+	    as if they were for the parent domain name.
+	    This prevents flooding by requesting random.wild.example.com.
+	    For similar reasons, NXDOMAIN responses are counted and rate
+	    limited as if they were for nearest valid domain name.
+	  </para>
+
+	  <para>
+	    Many attacks using DNS involve UDP requests with forged source
+	    addresses.
+	    Rate limiting prevents the use of BIND 9 to flood the network
+	    of a forged victim, but could let a third party block responses
+	    to legitimate requests.
+	    There is a mechanism that can answer some legitimate
+	    requests from a client whose address is being forged in a flood.
+	    Setting <command>slip</command> to 5 (its default) causes every
+	    fifth UDP request to be answered with a small response
+	    claiming that the response would have been truncated.
+	    The small size and relative infrequency of the response make
+	    it unattractive for abuse of third parties.
+	    A legitimate DNS client will retransmit its request with TCP,
+	    which is less vulnerable to forgery and flooding than UDP.
+	    <command>slip</command> must be between 0 and 10.
+	    0 disables the mechanism.
+	    TCP and error responses cannot be replaced with responses
+	    with the <literal>TC</literal> flag, and so are simply
+	    leaked at the <command>slip</command> rate.
+	  </para>
+
+	  <para>
+	    The maximum size of the table used to track requests and so
+	    rate limit responses is set with <command>max-table-size</command>.
+	    Each entry in the table is between 40 and 80 bytes.
+	    The default of 10,000 is suitable for a server receiving
+	    5000 DNS requests/second.
+	    10,000 entries require about 1 megabyte.
+	  </para>
+
+	  <para>
+	    To reduce cold start costs including those in growing the
+	    table, <command>min-table-size</command> (default 1000)
+	    can set the minimum table size.
+	  </para>
+
+	  <para>
+	    Use <command>log-only yes</command> to test rate limiting parameters
+	    without actually dropping any requests.
+	  </para>
+	</sect3>
       </sect2>
 
       <sect2 id="server_statement_grammar">

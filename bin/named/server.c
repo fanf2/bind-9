@@ -1547,6 +1547,176 @@ configure_rpz(dns_view_t *view, const cfg_listelt_t *element) {
 	return (result);
 }
 
+static isc_result_t
+configure_rrl(dns_view_t *view, const cfg_obj_t *map) {
+	const cfg_obj_t *obj;
+	dns_rrl_t *rrl;
+	isc_result_t result;
+ 	int min_entries, i, j;
+
+	/*
+	 * Most DNS servers have few clients, but intentinally open
+	 * recursive and authoritative servers often have many.
+	 * So start with a small number of entries unless told otherwise
+	 * to reduce cold-start costs.
+	 */
+	min_entries = 1000;
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "min-table-size", &obj)) {
+		min_entries = cfg_obj_asuint32(obj);
+		if (min_entries < 1) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "invalid 'rate-limit {min-table-size %d;}'",
+				    i);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	result = dns_rrl_init(&rrl, view, min_entries);
+	if (result != ISC_R_SUCCESS)
+		return (result);
+
+	i = ISC_MAX(10000, min_entries);
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "max-table-size", &obj)) {
+		i = cfg_obj_asuint32(obj);
+		if (min_entries < 1) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "invalid 'rate-limit {max-table-size %d;}'"
+				    " for 'min-table-size %d'",
+				    i, min_entries);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	rrl->max_entries = i;
+
+	obj = NULL;
+	result = cfg_map_get(map, "responses-per-second", &obj);
+	if (ISC_R_SUCCESS != result) {
+		cfg_obj_log(map, ns_g_lctx, ISC_LOG_ERROR,
+			    "'rate-limit { responses-per-second X;}'"
+			    "  unspecified");
+		goto cleanup;
+	} else {
+		i = cfg_obj_asuint32(obj);
+		if (i > DNS_RRL_MAX_RATE) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "'rate-limit {responses-per-second %d;}'",
+				    i);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	rrl->responses_per_second = i;
+	/*
+	 * The default error rate is the response rate.
+	 */
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "errors-per-second", &obj)) {
+		i = cfg_obj_asuint32(obj);
+		if (i > DNS_RRL_MAX_RATE) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "invalid"
+				    " 'rate-limit {errors-per-second %d;}'",
+				    i);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	rrl->errors_per_second = i;
+
+
+	i = 15;
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "window", &obj)) {
+		i = cfg_obj_asuint32(obj);
+		if (i < 1 || i > DNS_RRL_MAX_WINDOW) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "invalid"
+				    " 'rate-limit {window %d;}'",
+				    i);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	rrl->window = i;
+
+	i = 24;
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "IPv4-prefix-length", &obj)) {
+		i = cfg_obj_asuint32(obj);
+		if (i < 8 || i > 32) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "invalid"
+				    " 'rate-limit {IPv4-prefix-length %d;}'",
+				    i);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	rrl->ipv4_prefixlen = i;
+	if (i == 32)
+		rrl->ipv4_mask = 0xffffffff;
+	else
+		rrl->ipv4_mask = htonl(0xffffffff << (32-i));
+
+	i = 56;
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "IPv6-prefix-length", &obj)) {
+		i = cfg_obj_asuint32(obj);
+		if (i < 16 || i > 128) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "invalid"
+				    " 'rate-limit {IPv6-prefix-length %d;}'",
+				    i);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	rrl->ipv6_prefixlen = i;
+	memset(rrl->ipv6_mask, 0xff, sizeof(rrl->ipv6_mask));
+	for (j = 0; j < 4; ++j) {
+		if (i == 0) {
+			rrl->ipv6_mask[j] = 0;
+		} else if (i < 32) {
+			rrl->ipv6_mask[j] = htonl(0xffffffff << (32-i));
+			i = 0;
+		} else {
+			rrl->ipv6_mask[j] = 0xffffffff;
+			i -= 32;
+		}
+	}
+
+	i = 5;
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "slip", &obj)) {
+		i = cfg_obj_asuint32(obj);
+		if (i > 10) {
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
+				    "invalid 'rate-limit {slip %d;}'",
+				    i);
+			result = ISC_R_RANGE;
+			goto cleanup;
+		}
+	}
+	rrl->slip = i;
+
+	/*
+	 * Disable actions but not logging of what would have happened.
+	 */
+	obj = NULL;
+	if (ISC_R_SUCCESS == cfg_map_get(map, "log-only", &obj) &&
+	    cfg_obj_asboolean(obj))
+		rrl->log_only = ISC_TRUE;
+
+	return (ISC_R_SUCCESS);
+
+ cleanup:
+	dns_rrl_view_destroy(view);
+	return (result);
+}
+
 /*
  * Configure 'view' according to 'vconfig', taking defaults from 'config'
  * where values are missing in 'vconfig'.
@@ -2874,6 +3044,19 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 			if (result != ISC_R_SUCCESS)
 				goto cleanup;
 			dns_rpz_set_need(ISC_TRUE);
+		}
+	}
+
+	/*
+	 * Build rate-limit data only for views used for real lookups.
+	 */
+	if (view->rdclass == dns_rdataclass_in && need_hints) {
+		obj = NULL;
+		result = ns_config_get(maps, "rate-limit", &obj);
+		if (result == ISC_R_SUCCESS) {
+			result = configure_rrl(view, obj);
+			if (result != ISC_R_SUCCESS)
+				goto cleanup;
 		}
 	}
 

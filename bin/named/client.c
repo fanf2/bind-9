@@ -988,6 +988,11 @@ ns_client_send(ns_client_t *client) {
 	}
 	if (result != ISC_R_SUCCESS)
 		goto done;
+	/*
+	 * Stop after the question if TC was set for rate limiting.
+	 */
+	if ((client->message->flags & DNS_MESSAGEFLAG_TC) != 0)
+		goto renderend;
 	result = dns_message_rendersection(client->message,
 					   DNS_SECTION_ANSWER,
 					   DNS_MESSAGERENDER_PARTIAL |
@@ -1097,6 +1102,8 @@ void
 ns_client_error(ns_client_t *client, isc_result_t result) {
 	dns_rcode_t rcode;
 	dns_message_t *message;
+	char buf[64];
+	isc_buffer_t b;
 
 	REQUIRE(NS_CLIENT_VALID(client));
 
@@ -1112,9 +1119,6 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 	if (rcode == dns_rcode_formerr &&
 	    ns_client_dropport(isc_sockaddr_getport(&client->peeraddr)) !=
 	    DROPPORT_NO) {
-		char buf[64];
-		isc_buffer_t b;
-
 		isc_buffer_init(&b, buf, sizeof(buf) - 1);
 		if (dns_rcode_totext(rcode, &b) != ISC_R_SUCCESS)
 			isc_buffer_putstr(&b, "UNKNOWN RCODE");
@@ -1126,6 +1130,65 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 		return;
 	}
 #endif
+
+	/*
+	 * Try to rate limit error packets.
+	 */
+	if (client->view != NULL && client->view->rrl != NULL &&
+	    !TCP_CLIENT(client)) {
+		dns_rrl_result_t rrl_result;
+		int log_level, prefixlen;
+		const char *lo_str, *rep_str;
+
+		rrl_result = dns_rrl(client->view->rrl, &client->peeraddr,
+				     client->message->rdclass,
+				     dns_rdatatype_none, NULL, ISC_TRUE,
+				     client->now);
+		if (rrl_result != DNS_RRL_RESULT_OK) {
+			switch (rrl_result) {
+			case DNS_RRL_RESULT_NEW_DROP:
+				log_level = DNS_RRL_LOG_INIT;
+				rep_str = "";
+				break;
+			case DNS_RRL_RESULT_OLD_DROP:
+				log_level = DNS_RRL_LOG_REPEAT;
+				rep_str = "still ";
+				break;
+			case DNS_RRL_RESULT_SLIP:
+				log_level = DNS_RRL_LOG_DEBUG3;
+				rep_str = "slip ";
+				break;
+			case DNS_RRL_RESULT_OK:
+				INSIST(0);
+				break;
+			}
+			if (client->view->rrl->log_only) {
+				lo_str = "would ";
+			} else {
+				lo_str = "";
+			}
+			if (client->peeraddr.type.sa.sa_family == AF_INET)
+				prefixlen = client->view->rrl->ipv4_prefixlen;
+			else
+				prefixlen = client->view->rrl->ipv6_prefixlen;
+			if (isc_log_wouldlog(ns_g_lctx, log_level)) {
+				isc_buffer_init(&b, buf, sizeof(buf) - 1);
+				if (dns_rcode_totext(rcode, &b) != ISC_R_SUCCESS)
+					isc_buffer_putstr(&b, "UNKNOWN RCODE");
+				ns_client_log(client, DNS_LOGCATEGORY_RRL,
+					      NS_LOGMODULE_CLIENT, log_level,
+					      "%s%srate limit %.*s"
+					      " error response to /%d",
+					      lo_str, rep_str,
+					      (int)isc_buffer_usedlength(&b),
+					      buf, prefixlen);
+			}
+			if (!client->view->rrl->log_only) {
+				ns_client_next(client, DNS_R_DROP);
+				return;
+			}
+		}
+	}
 
 	/*
 	 * Message may be an in-progress reply that we had trouble

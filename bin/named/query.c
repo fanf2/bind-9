@@ -5677,6 +5677,82 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 				client->query.dboptions, client->now,
 				&node, fname, &cm, &ci, rdataset, sigrdataset);
 
+	/*
+	 * Rate limit these responses to this client.
+	 */
+	if (client->view->rrl != NULL &&
+	    (client->attributes & NS_CLIENTATTR_TCP) == 0) {
+		char fnamebuf[DNS_NAME_FORMATSIZE];
+		const char *lo_str, *rep_str, *for_str;
+		int log_level, prefixlen;
+		dns_rrl_result_t rrl_result;
+
+		rrl_result = dns_rrl(client->view->rrl, &client->peeraddr,
+				     client->message->rdclass, qtype, fname,
+				     ISC_FALSE, client->now);
+		if (rrl_result != DNS_RRL_RESULT_OK) {
+			switch (rrl_result) {
+			case DNS_RRL_RESULT_NEW_DROP:
+				log_level = DNS_RRL_LOG_INIT;
+				rep_str = "";
+				break;
+			case DNS_RRL_RESULT_OLD_DROP:
+				log_level = DNS_RRL_LOG_REPEAT;
+				rep_str = "still ";
+				break;
+			case DNS_RRL_RESULT_SLIP:
+				log_level = DNS_RRL_LOG_DEBUG3;
+				rep_str = "slip ";
+				break;
+			case DNS_RRL_RESULT_OK:
+				INSIST(0);
+				break;
+			}
+			if (client->view->rrl->log_only) {
+				lo_str = "would ";
+				rrl_result = DNS_RRL_RESULT_OK;
+			} else {
+				lo_str = "";
+			}
+			if (client->peeraddr.type.sa.sa_family == AF_INET)
+				prefixlen = client->view->rrl->ipv4_prefixlen;
+			else
+				prefixlen = client->view->rrl->ipv6_prefixlen;
+			if (isc_log_wouldlog(ns_g_lctx, log_level)) {
+				if (fname == NULL ||
+				    !dns_name_isabsolute(fname)) {
+					fnamebuf[0] = '\0';
+					for_str = "";
+				} else {
+					dns_name_format(fname, fnamebuf,
+							sizeof(fnamebuf));
+					for_str = " for ";
+				}
+				ns_client_log(client, DNS_LOGCATEGORY_RRL,
+					      NS_LOGMODULE_CLIENT, log_level,
+					      "%s%srate limiting /%d%s%s",
+					      lo_str, rep_str, prefixlen,
+					      for_str, fnamebuf);
+			}
+			switch (rrl_result) {
+			case DNS_RRL_RESULT_NEW_DROP:
+			case DNS_RRL_RESULT_OLD_DROP:
+				QUERY_ERROR(DNS_R_DROP);
+				goto cleanup;
+			case DNS_RRL_RESULT_SLIP:
+				if ((client->attributes &
+				     NS_CLIENTATTR_TCP) == 0) {
+					client->message->flags |=
+							    DNS_MESSAGEFLAG_TC;
+							    goto cleanup;
+				}
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
  resume:
 	CTRACE("query_find: resume");
 
@@ -7086,12 +7162,14 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 	}
 
 	if (eresult != ISC_R_SUCCESS &&
-	    (!PARTIALANSWER(client) || WANTRECURSION(client))) {
+	    (!PARTIALANSWER(client) || WANTRECURSION(client)
+	     || eresult == DNS_R_DROP)) {
 		if (eresult == DNS_R_DUPLICATE || eresult == DNS_R_DROP) {
 			/*
 			 * This was a duplicate query that we are
-			 * recursing on.  Don't send a response now.
-			 * The original query will still cause a response.
+			 * recursing on or the result of rate limiting.
+			 * Don't send a response now for a duplicate query,
+			 * because the original will still cause a response.
 			 */
 			query_next(client, eresult);
 		} else {

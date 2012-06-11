@@ -629,6 +629,9 @@ dns_result_register
 dns_result_torcode
 dns_result_totext
 dns_rootns_create
+dns_rrl
+dns_rrl_init
+dns_rrl_view_destroy
 dns_rpz_cidr_addip
 dns_rpz_cidr_deleteip
 dns_rpz_cidr_find
