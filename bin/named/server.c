@@ -2585,6 +2585,10 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 		result = ns_config_get(maps, "query-rate-drop", &obj);
 		if (result == ISC_R_SUCCESS)
 			view->queryrate_drop = cfg_obj_asuint32(obj);
+		isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL,
+			      NS_LOGMODULE_SERVER, ISC_LOG_INFO,
+			      "set up query-rate counter (%u/%u) for view %s",
+			      bloomrate_size, bloomrate_hashes, view->name);
 	}
 
 	obj = NULL;
