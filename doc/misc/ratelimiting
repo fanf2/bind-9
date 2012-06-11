@@ -1,8 +1,16 @@
 Notes on rate limiting
 ----------------------
 
-This feature provides per-client query rate limiting. You can
-configure the following countermeasures to fast querying clients:
+This feature provides per-client query rate limiting. The
+implementation is designed to avoid any per-client scaling factors.
+There is a constant overhead per query, and a fixed memory overhead
+that should be scaled according to the server's overall capacity. The
+downside of this approach is that there is a risk that low-rate
+clients may falsely be identified as high-rate clients. This
+probability can be controlled using the sizing parameters.
+
+You can configure the following countermeasures to fast querying
+clients:
 
 * Just log when the client passes a threshold
 * Truncate responses to the client when it is above a threshold
@@ -21,21 +29,42 @@ For sizing the state table:
 query-rate-table-size number
 query-rate-hash-count number
 
-I am not currently sure how to set these parameters which is why they
-are configurable. I think the table size should be something like the
-hash count multiplied by the number of over-threshold clients you
-expect. The hash count should be scaled according to your sensitivity
-to false positives, e.g. 10 gives a fpr of 2^-10. Ish. I need to check
-the sums. (Perhaps in the final code the hash count can be fixed.)
+I have not yet analysed how to set these parameters which is why they
+are configurable. It should be possible to auto-size the table based
+on the server's overall query rate, target false positive rate, and
+the aging parameters.
 
 There is a fixed measurement interval of five seconds, which is
 roughly how quickly the server will detect an over-limit client. The
 server retains some memory of past behaviour: there is a fixed
 attenuation factor of 0.75 between intervals, which means that after a
-minute a client's previous behaviour is almost completely forgotten.
+minute a client's previous behaviour is almost completely forgotten
+(0.75^(60/5) = 3%).
 
 The rate measurement code is in isc/bloomrate.[ch] and the limits are
 handled by bin/named.
+
+Questions:
+
+The bloomrate code spins up a task to handle periodic aging of rate
+measurements. Is this too heavy? There isn't a handy task available
+when configuring a view. Maybe I've got the relationships between the
+various code modules wrong.
+
+Might need an accurate accounting stage after the Bloom filter,
+dealing with just high-rate clients. This will eliminate the false
+positive problem, and allow us to log problem clients without
+spamming every query.
+
+To do:
+
+Actually hook into the query processing :-)
+
+Countermeasures.
+
+Logging. See above.
+
+Auto-sizing.
 
 ------------------------------------------------------
 Written by Tony Finch <fanf2@cam.ac.uk> <dot@dotat.at>
