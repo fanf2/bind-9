@@ -375,9 +375,6 @@ nsu_strsep(char **stringp, const char *delim) {
 	const char *d;
 	char sc, dc;
 
-	if (string == NULL)
-		return (NULL);
-
 	for (; *string != '\0'; string++) {
 		sc = *string;
 		for (d = delim; (dc = *d) != '\0'; d++) {
@@ -398,7 +395,7 @@ nsu_strsep(char **stringp, const char *delim) {
 			}
 		}
 	}
-	*stringp = NULL;
+	*stringp = s;
 	return (string);
 }
 
@@ -1157,11 +1154,6 @@ parse_rdata(char **cmdlinep, dns_rdataclass_t rdataclass,
 	isc_lex_t *lex = NULL;
 	dns_rdatacallbacks_t callbacks;
 	isc_result_t result;
-
-	if (cmdline == NULL) {
-		rdata->flags = DNS_RDATA_UPDATE;
-		return (STATUS_MORE);
-	}
 
 	while (*cmdline != 0 && isspace((unsigned char)*cmdline))
 		cmdline++;
