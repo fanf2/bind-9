@@ -2,6 +2,9 @@ This version of BIND has been modified by Tony Finch at the University
 of Cambridge Computing Service to add per-client query rate limiting.
 See doc/misc/ratelimiting for details.
 
+You don't want this code, you want the response rate limiting patch by
+Paul Vixie and Vernon Schryver. http://www.redbarn.org/dns/ratelimits
+
 BIND 9
 
 	BIND version 9 is a major rewrite of nearly all aspects of the
