@@ -1547,8 +1547,18 @@ configure_rpz(dns_view_t *view, const cfg_listelt_t *element) {
 	return (result);
 }
 
+#define CHECK_RRL(obj, cond, pat, val) \
+	do {								\
+		if (!(cond)) {						\
+			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,	\
+				    pat, val);				\
+			result = ISC_R_RANGE;				\
+			goto cleanup;					\
+		    }							\
+	} while (0)
+
 static isc_result_t
-configure_rrl(dns_view_t *view, const cfg_obj_t *map) {
+configure_rrl(dns_view_t *view, const cfg_obj_t *config, const cfg_obj_t *map) {
 	const cfg_obj_t *obj;
 	dns_rrl_t *rrl;
 	isc_result_t result;
@@ -1562,15 +1572,11 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *map) {
 	 */
 	min_entries = 1000;
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "min-table-size", &obj)) {
+	result = cfg_map_get(map, "min-table-size", &obj);
+	if (result == ISC_R_SUCCESS) {
 		min_entries = cfg_obj_asuint32(obj);
-		if (min_entries < 1) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "invalid 'rate-limit {min-table-size %d;}'",
-				    i);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, min_entries > 1,
+			  "invalid '{min-table-size %d;}'", min_entries);
 	}
 	result = dns_rrl_init(&rrl, view, min_entries);
 	if (result != ISC_R_SUCCESS)
@@ -1578,82 +1584,78 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *map) {
 
 	i = ISC_MAX(10000, min_entries);
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "max-table-size", &obj)) {
+	result = cfg_map_get(map, "max-table-size", &obj);
+	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		if (min_entries < 1) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "invalid 'rate-limit {max-table-size %d;}'"
-				    " for 'min-table-size %d'",
-				    i, min_entries);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, i >= min_entries,
+			  "invalid '{max-table-size %d;}'", i);
 	}
 	rrl->max_entries = i;
 
 	obj = NULL;
 	result = cfg_map_get(map, "responses-per-second", &obj);
-	if (ISC_R_SUCCESS != result) {
-		cfg_obj_log(map, ns_g_lctx, ISC_LOG_ERROR,
-			    "'rate-limit { responses-per-second X;}'"
-			    "  unspecified");
-		goto cleanup;
-	} else {
+	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		if (i > DNS_RRL_MAX_RATE) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "'rate-limit {responses-per-second %d;}'",
-				    i);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE,
+			  "invalid '{responses-per-second %d;}'", i);
 	}
 	rrl->responses_per_second = i;
+	rrl->scaled_responses_per_second = rrl->responses_per_second;
 	/*
 	 * The default error rate is the response rate.
 	 */
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "errors-per-second", &obj)) {
+	result = cfg_map_get(map, "errors-per-second", &obj);
+	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		if (i > DNS_RRL_MAX_RATE) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "invalid"
-				    " 'rate-limit {errors-per-second %d;}'",
-				    i);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE,
+			  "invalid '{errors-per-second %d;}'", i);
 	}
 	rrl->errors_per_second = i;
+	rrl->scaled_errors_per_second = rrl->errors_per_second;
+
+	/*
+	 * The default NXDOMAIN rate is the response rate.
+	 */
+	i = rrl->responses_per_second;
+	obj = NULL;
+	result = cfg_map_get(map, "nxdomains-per-second", &obj);
+	if (result == ISC_R_SUCCESS) {
+		i = cfg_obj_asuint32(obj);
+		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE,
+			  "invalid '{nxdomains-per-second %d;}'", i);
+	}
+	rrl->nxdomains_per_second = i;
+	rrl->scaled_nxdomains_per_second = rrl->nxdomains_per_second;
 
 
 	i = 15;
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "window", &obj)) {
+	result = cfg_map_get(map, "window", &obj);
+	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		if (i < 1 || i > DNS_RRL_MAX_WINDOW) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "invalid"
-				    " 'rate-limit {window %d;}'",
-				    i);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, i >= 1 && i <= DNS_RRL_MAX_WINDOW,
+			  "invalid '{window %d;}'", i);
 	}
 	rrl->window = i;
 
+	i = 0;
+	obj = NULL;
+	result = cfg_map_get(map, "qps-scale", &obj);
+	if (result == ISC_R_SUCCESS) {
+		i = cfg_obj_asuint32(obj);
+		CHECK_RRL(obj, i >= 1, "invalid '{qps-scale %d;}'", i);
+	}
+	rrl->qps_scale = i;
+	rrl->qps = 1.0;
+
 	i = 24;
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "IPv4-prefix-length", &obj)) {
+	result = cfg_map_get(map, "IPv4-prefix-length", &obj);
+	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		if (i < 8 || i > 32) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "invalid"
-				    " 'rate-limit {IPv4-prefix-length %d;}'",
-				    i);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, i >= 8 && i <= 32,
+			  "invalid '{IPv4-prefix-length %d;}'", i);
 	}
 	rrl->ipv4_prefixlen = i;
 	if (i == 32)
@@ -1663,16 +1665,11 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *map) {
 
 	i = 56;
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "IPv6-prefix-length", &obj)) {
+	result = cfg_map_get(map, "IPv6-prefix-length", &obj);
+	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		if (i < 16 || i > 128) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "invalid"
-				    " 'rate-limit {IPv6-prefix-length %d;}'",
-				    i);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, i >= 16 && i <= 128,
+			  "invalid '{IPv6-prefix-length %d;}'", i);
 	}
 	rrl->ipv6_prefixlen = i;
 	memset(rrl->ipv6_mask, 0xff, sizeof(rrl->ipv6_mask));
@@ -1688,27 +1685,32 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *map) {
 		}
 	}
 
-	i = 5;
+	i = 2;
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "slip", &obj)) {
+	result = cfg_map_get(map, "slip", &obj);
+	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		if (i > 10) {
-			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,
-				    "invalid 'rate-limit {slip %d;}'",
-				    i);
-			result = ISC_R_RANGE;
-			goto cleanup;
-		}
+		CHECK_RRL(obj, i <= 10, "invalid '{slip %d;}'", i);
 	}
 	rrl->slip = i;
+	rrl->scaled_slip = rrl->slip;
 
-	/*
-	 * Disable actions but not logging of what would have happened.
-	 */
 	obj = NULL;
-	if (ISC_R_SUCCESS == cfg_map_get(map, "log-only", &obj) &&
-	    cfg_obj_asboolean(obj))
+	result = cfg_map_get(map, "exempt-clients", &obj);
+	if (result == ISC_R_SUCCESS) {
+		result = cfg_acl_fromconfig(obj, config, ns_g_lctx,
+					    ns_g_aclconfctx, ns_g_mctx,
+					    0, &rrl->exempt);
+		CHECK_RRL(obj, result == ISC_R_SUCCESS,
+			  "invalid %s", "address_match_list");
+	}
+
+	obj = NULL;
+	result = cfg_map_get(map, "log-only", &obj);
+	if (result == ISC_R_SUCCESS && cfg_obj_asboolean(obj))
 		rrl->log_only = ISC_TRUE;
+	else
+		rrl->log_only = ISC_FALSE;
 
 	return (ISC_R_SUCCESS);
 
@@ -3054,7 +3056,7 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 		obj = NULL;
 		result = ns_config_get(maps, "rate-limit", &obj);
 		if (result == ISC_R_SUCCESS) {
-			result = configure_rrl(view, obj);
+			result = configure_rrl(view, config, obj);
 			if (result != ISC_R_SUCCESS)
 				goto cleanup;
 		}

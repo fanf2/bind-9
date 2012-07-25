@@ -33,30 +33,41 @@ ISC_LANG_BEGINDECLS
 
 
 #define DNS_RRL_LOG_FAIL	ISC_LOG_WARNING
-#define DNS_RRL_LOG_INIT	ISC_LOG_INFO
-#define DNS_RRL_LOG_REPEAT	ISC_LOG_DEBUG(1)
+#define DNS_RRL_LOG_DROP	ISC_LOG_INFO
 #define DNS_RRL_LOG_DEBUG1	ISC_LOG_DEBUG(3)
 #define DNS_RRL_LOG_DEBUG2	ISC_LOG_DEBUG(4)
-#define DNS_RRL_LOG_DEBUG3	ISC_LOG_DEBUG(5)
+#define DNS_RRL_LOG_DEBUG3	ISC_LOG_DEBUG(9)
+
+#define DNS_RRL_LOG_WS_BUF_LEN	    sizeof("would still")
+#define DNS_RRL_LOG_CLIENT_BUF_LEN  (ISC_NETADDR_FORMATSIZE + \
+				     sizeof(" for IN ") + sizeof(" "))
 
 
 typedef struct dns_rrl_hash dns_rrl_hash_t;
 
 /*
  * A rate limit bucket key.
+ * This should be small to limit the total size of the database.
  */
+typedef isc_uint8_t dns_rrl_kflags_t;
 typedef struct dns_rrl_key dns_rrl_key_t;
 struct dns_rrl_key {
-	isc_uint32_t	ip[4];		/* IP address */
-	unsigned int	name;		/* hash of DNS name */
-	isc_uint8_t	type;		/* query type */
-	isc_uint8_t	flags;
-# define DNS_RRL_FLAG_ERROR	0x01
-# define DNS_RRL_FLAG_NOT_IN	0x02
+	isc_uint32_t	    ip[4];	/* IP address */
+	unsigned int	    name;	/* hash of DNS name */
+	dns_rdatatype_t	    qtype;	/* query type */
+	dns_rrl_kflags_t    kflags;
+# define DNS_RRL_KFLAG_USED_TCP   0x01
+# define DNS_RRL_KFLAG_NXDOMAIN	    0x02
+# define DNS_RRL_KFLAG_ERROR	    0x04
+# define DNS_RRL_KFLAG_NOT_IN	    0x08
+# define DNS_RRL_KFLAG_IPV6	    0x08
 };
 
 /*
  * A rate-limit entry.
+ * This should be small to limit the total size of the database.
+ * With gcc on ARM, the key should have __attribute((__packed__)) to
+ *	avoid padding to a multiple of 8 bytes.
  */
 typedef struct dns_rrl_entry dns_rrl_entry_t;
 typedef ISC_LIST(dns_rrl_entry_t) dns_rrl_bin_t;
@@ -70,6 +81,8 @@ struct dns_rrl_entry {
 # define DNS_RRL_MAX_RATE	(ISC_INT32_MAX / DNS_RRL_MAX_WINDOW)
 	dns_rrl_key_t	key;
 	isc_uint8_t	slip_cnt;
+	isc_uint8_t	log_secs;
+# define DNS_RRL_MAX_LOG_SECS	60
 };
 
 /*
@@ -102,11 +115,23 @@ struct dns_rrl {
 	isc_boolean_t	log_only;
 	int		responses_per_second;
 	int		errors_per_second;
+	int		nxdomains_per_second;
 	int		window;
 	int		slip;
+	double		qps_scale;
 	int		max_entries;
 
+	dns_acl_t	*exempt;
+
 	int		num_entries;
+
+	int		qps_responses;
+	isc_stdtime_t	qps_time;
+	double		qps;
+	int		scaled_responses_per_second;
+	int		scaled_errors_per_second;
+	int		scaled_nxdomains_per_second;
+	int		scaled_slip;
 
 	unsigned int	probes;
 	unsigned int	searches;
@@ -125,15 +150,18 @@ struct dns_rrl {
 
 typedef enum {
 	DNS_RRL_RESULT_OK,
-	DNS_RRL_RESULT_NEW_DROP,
-	DNS_RRL_RESULT_OLD_DROP,
+	DNS_RRL_RESULT_DROP,
 	DNS_RRL_RESULT_SLIP,
 } dns_rrl_result_t;
 
 dns_rrl_result_t
 dns_rrl(dns_rrl_t *rrl, const isc_sockaddr_t *client_addr,
-	dns_rdataclass_t class, dns_rdatatype_t qtype, dns_name_t *fname,
-	isc_boolean_t is_error, isc_stdtime_t now);
+	dns_rdataclass_t rdclass, dns_rdatatype_t qtype,
+	dns_name_t *fname, dns_rcode_t rcode, isc_stdtime_t now,
+	isc_boolean_t wouldlog, isc_boolean_t is_tcp,
+	char *log_ws_buf, int log_ws_buf_len,
+	char *log_client_buf, int log_client_buf_len,
+	char *fname_buf, int fname_buf_len);
 
 void
 dns_rrl_view_destroy(dns_view_t *view);

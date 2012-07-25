@@ -1102,8 +1102,6 @@ void
 ns_client_error(ns_client_t *client, isc_result_t result) {
 	dns_rcode_t rcode;
 	dns_message_t *message;
-	char buf[64];
-	isc_buffer_t b;
 
 	REQUIRE(NS_CLIENT_VALID(client));
 
@@ -1119,6 +1117,9 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 	if (rcode == dns_rcode_formerr &&
 	    ns_client_dropport(isc_sockaddr_getport(&client->peeraddr)) !=
 	    DROPPORT_NO) {
+		char buf[64];
+		isc_buffer_t b;
+
 		isc_buffer_init(&b, buf, sizeof(buf) - 1);
 		if (dns_rcode_totext(rcode, &b) != ISC_R_SUCCESS)
 			isc_buffer_putstr(&b, "UNKNOWN RCODE");
@@ -1132,57 +1133,53 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 #endif
 
 	/*
-	 * Try to rate limit error packets.
+	 * Try to rate limit error responses.
 	 */
-	if (client->view != NULL && client->view->rrl != NULL &&
-	    !TCP_CLIENT(client)) {
+	if (client->view != NULL && client->view->rrl != NULL) {
+		isc_boolean_t wouldlog;
+		char log_ws_buf[DNS_RRL_LOG_WS_BUF_LEN];
+		char log_client_buf[DNS_RRL_LOG_CLIENT_BUF_LEN];
+		char fname_buf[1];
 		dns_rrl_result_t rrl_result;
-		int log_level, prefixlen;
-		const char *lo_str, *rep_str;
 
+		wouldlog = isc_log_wouldlog(ns_g_lctx, DNS_RRL_LOG_DROP);
 		rrl_result = dns_rrl(client->view->rrl, &client->peeraddr,
-				     client->message->rdclass,
-				     dns_rdatatype_none, NULL, ISC_TRUE,
-				     client->now);
+				     dns_rdataclass_in, dns_rdatatype_none,
+				     NULL, rcode, client->now, wouldlog,
+				     TCP_CLIENT(client),
+				     log_ws_buf, sizeof(log_ws_buf),
+				     log_client_buf, sizeof(log_client_buf),
+				     fname_buf, sizeof(fname_buf));
 		if (rrl_result != DNS_RRL_RESULT_OK) {
-			switch (rrl_result) {
-			case DNS_RRL_RESULT_NEW_DROP:
-				log_level = DNS_RRL_LOG_INIT;
-				rep_str = "";
-				break;
-			case DNS_RRL_RESULT_OLD_DROP:
-				log_level = DNS_RRL_LOG_REPEAT;
-				rep_str = "still ";
-				break;
-			case DNS_RRL_RESULT_SLIP:
-				log_level = DNS_RRL_LOG_DEBUG3;
-				rep_str = "slip ";
-				break;
-			case DNS_RRL_RESULT_OK:
-				INSIST(0);
-				break;
+			/*
+			 * Log dropped errors in the query category
+			 * so that they are not lost in silence.
+			 * Starts of rate-limited bursts are logged in
+			 * NS_LOGCATEGORY_RRL.
+			 */
+			if (wouldlog) {
+				char ebuf[64];
+				isc_buffer_t eb;
+
+				isc_buffer_init(&eb, ebuf, sizeof(ebuf));
+				if (dns_rcode_totext(rcode, &eb)!=ISC_R_SUCCESS)
+					isc_buffer_putstr(&eb, "UNKNOWN RCODE");
+				ns_client_log(client, NS_LOGCATEGORY_QUERIES,
+					      NS_LOGMODULE_CLIENT,
+					      DNS_RRL_LOG_DROP,
+					      "%srate limit drop %.*s"
+					      " response to %s",
+					      log_ws_buf,
+					      (int)isc_buffer_usedlength(&eb),
+					      ebuf,
+					      log_client_buf);
 			}
-			if (client->view->rrl->log_only) {
-				lo_str = "would ";
-			} else {
-				lo_str = "";
-			}
-			if (client->peeraddr.type.sa.sa_family == AF_INET)
-				prefixlen = client->view->rrl->ipv4_prefixlen;
-			else
-				prefixlen = client->view->rrl->ipv6_prefixlen;
-			if (isc_log_wouldlog(ns_g_lctx, log_level)) {
-				isc_buffer_init(&b, buf, sizeof(buf) - 1);
-				if (dns_rcode_totext(rcode, &b) != ISC_R_SUCCESS)
-					isc_buffer_putstr(&b, "UNKNOWN RCODE");
-				ns_client_log(client, DNS_LOGCATEGORY_RRL,
-					      NS_LOGMODULE_CLIENT, log_level,
-					      "%s%srate limit %.*s"
-					      " error response to /%d",
-					      lo_str, rep_str,
-					      (int)isc_buffer_usedlength(&b),
-					      buf, prefixlen);
-			}
+			/*
+			 * Some error responses cannot be 'slipped',
+			 * so don't try.
+			 * This will counted with dropped queries in the
+			 * QryDropped counter.
+			 */
 			if (!client->view->rrl->log_only) {
 				ns_client_next(client, DNS_R_DROP);
 				return;

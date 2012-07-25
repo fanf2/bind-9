@@ -5677,84 +5677,120 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 				client->query.dboptions, client->now,
 				&node, fname, &cm, &ci, rdataset, sigrdataset);
 
+ resume:
+	CTRACE("query_find: resume");
+
 	/*
 	 * Rate limit these responses to this client.
 	 */
 	if (client->view->rrl != NULL &&
-	    (client->attributes & NS_CLIENTATTR_TCP) == 0) {
-		char fnamebuf[DNS_NAME_FORMATSIZE];
-		const char *lo_str, *rep_str, *for_str;
-		int log_level, prefixlen;
-		dns_rrl_result_t rrl_result;
+	    fname != NULL && dns_name_isabsolute(fname) &&
+	    (client->query.attributes & NS_QUERYATTR_RRL_CHECKED) == 0) {
+		dns_rdataset_t nc_rdataset;
+		dns_rcode_t rcode;
+		isc_boolean_t wouldlog;
+		char ws_buf[DNS_RRL_LOG_WS_BUF_LEN];
+		char client_buf[DNS_RRL_LOG_CLIENT_BUF_LEN];
+		char fname_buf[DNS_NAME_FORMATSIZE];
+		const char *act_str, *err_str;
+		dns_rrl_result_t nc_result, rrl_result;
 
+		client->query.attributes |= NS_QUERYATTR_RRL_CHECKED;
+
+		wouldlog = isc_log_wouldlog(ns_g_lctx, DNS_RRL_LOG_DROP);
+		tname = fname;
+		if (result == DNS_R_NXDOMAIN) {
+			/*
+			 * Use the database origin name to rate limit NXDOMAIN
+			 */
+			if (db != NULL)
+				tname = dns_db_origin(db);
+			rcode = dns_rcode_nxdomain;
+			err_str = "NXDOMAIN ";
+		} else if (result == DNS_R_NCACHENXDOMAIN &&
+			   rdataset != NULL &&
+			   dns_rdataset_isassociated(rdataset) &&
+			   (rdataset->attributes &
+			    DNS_RDATASETATTR_NEGATIVE) != 0) {
+			/*
+			 * Try to use owner name in the negative cache SOA.
+			 */
+			dns_fixedname_init(&fixed);
+			dns_rdataset_init(&nc_rdataset);
+			for (nc_result = dns_rdataset_first(rdataset);
+			     nc_result == ISC_R_SUCCESS;
+			     nc_result = dns_rdataset_next(rdataset)) {
+				dns_ncache_current(rdataset,
+						   dns_fixedname_name(&fixed),
+						   &nc_rdataset);
+				if (nc_rdataset.type == dns_rdatatype_soa) {
+					dns_rdataset_disassociate(&nc_rdataset);
+					tname = dns_fixedname_name(&fixed);
+					break;
+				}
+				dns_rdataset_disassociate(&nc_rdataset);
+			}
+			rcode = dns_rcode_nxdomain;
+			err_str = "NXDOMAIN ";
+		} else {
+			rcode = dns_rcode_noerror;
+			err_str = "";
+		}
 		rrl_result = dns_rrl(client->view->rrl, &client->peeraddr,
-				     client->message->rdclass, qtype, fname,
-				     ISC_FALSE, client->now);
+				     client->message->rdclass, qtype, tname,
+				     rcode, client->now, wouldlog,
+				     ISC_TF((client->attributes
+					     & NS_CLIENTATTR_TCP) != 0),
+				     ws_buf, sizeof(ws_buf),
+				     client_buf, sizeof(client_buf),
+				     fname_buf, sizeof(fname_buf));
 		if (rrl_result != DNS_RRL_RESULT_OK) {
-			switch (rrl_result) {
-			case DNS_RRL_RESULT_NEW_DROP:
-				log_level = DNS_RRL_LOG_INIT;
-				rep_str = "";
-				break;
-			case DNS_RRL_RESULT_OLD_DROP:
-				log_level = DNS_RRL_LOG_REPEAT;
-				rep_str = "still ";
-				break;
-			case DNS_RRL_RESULT_SLIP:
-				log_level = DNS_RRL_LOG_DEBUG3;
-				rep_str = "slip ";
-				break;
-			case DNS_RRL_RESULT_OK:
-				INSIST(0);
-				break;
+			/*
+			 * Log dropped or slipped responses in the query
+			 * category so that requests are not silently lost.
+			 * Starts of rate-limited bursts are logged in
+			 * DNS_LOGCATEGORY_RRL.
+			 *
+			 * Dropped responses are counted with dropped queries
+			 * in QryDropped while slipped responses are counted
+			 * with other truncated responses in RespTruncated.
+			 */
+			if (wouldlog) {
+				if (rrl_result == DNS_RRL_RESULT_DROP)
+					act_str = "drop";
+				else
+					act_str = "slip";
+				ns_client_log(client, NS_LOGCATEGORY_QUERIES,
+					      NS_LOGMODULE_CLIENT,
+					      DNS_RRL_LOG_DROP,
+					      "%srate limit %s %sresponse to"
+					      " %s%s",
+					      ws_buf, act_str, err_str,
+					      client_buf, fname_buf);
 			}
-			if (client->view->rrl->log_only) {
-				lo_str = "would ";
-				rrl_result = DNS_RRL_RESULT_OK;
-			} else {
-				lo_str = "";
-			}
-			if (client->peeraddr.type.sa.sa_family == AF_INET)
-				prefixlen = client->view->rrl->ipv4_prefixlen;
-			else
-				prefixlen = client->view->rrl->ipv6_prefixlen;
-			if (isc_log_wouldlog(ns_g_lctx, log_level)) {
-				if (fname == NULL ||
-				    !dns_name_isabsolute(fname)) {
-					fnamebuf[0] = '\0';
-					for_str = "";
+			if (!client->view->rrl->log_only) {
+				if (rrl_result == DNS_RRL_RESULT_DROP) {
+					/*
+					 * These will also be counted in
+					 * dns_nsstatscounter_dropped
+					 */
+					inc_stats(client,
+						dns_nsstatscounter_ratedropped);
+					QUERY_ERROR(DNS_R_DROP);
 				} else {
-					dns_name_format(fname, fnamebuf,
-							sizeof(fnamebuf));
-					for_str = " for ";
-				}
-				ns_client_log(client, DNS_LOGCATEGORY_RRL,
-					      NS_LOGMODULE_CLIENT, log_level,
-					      "%s%srate limiting /%d%s%s",
-					      lo_str, rep_str, prefixlen,
-					      for_str, fnamebuf);
-			}
-			switch (rrl_result) {
-			case DNS_RRL_RESULT_NEW_DROP:
-			case DNS_RRL_RESULT_OLD_DROP:
-				QUERY_ERROR(DNS_R_DROP);
-				goto cleanup;
-			case DNS_RRL_RESULT_SLIP:
-				if ((client->attributes &
-				     NS_CLIENTATTR_TCP) == 0) {
+					/*
+					 * These will also be counted in
+					 * dns_nsstatscounter_truncatedresp
+					 */
+					inc_stats(client,
+						dns_nsstatscounter_rateslipped);
 					client->message->flags |=
-							    DNS_MESSAGEFLAG_TC;
-							    goto cleanup;
+						DNS_MESSAGEFLAG_TC;
 				}
-				break;
-			default:
-				break;
+				goto cleanup;
 			}
 		}
 	}
-
- resume:
-	CTRACE("query_find: resume");
 
 	if (!ISC_LIST_EMPTY(client->view->rpz_zones) &&
 	    RECURSIONOK(client) && !RECURSING(client) &&

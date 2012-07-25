@@ -22,7 +22,7 @@
  * Rate limit DNS responses.
  */
 
-#define ISC_LIST_CHECKINIT
+/* #define ISC_LIST_CHECKINIT */
 
 #include <config.h>
 #include <isc/mem.h>
@@ -30,6 +30,8 @@
 #include <isc/netaddr.h>
 
 #include <dns/result.h>
+#include <dns/rcode.h>
+#include <dns/rdatatype.h>
 #include <dns/log.h>
 #include <dns/rrl.h>
 #include <dns/view.h>
@@ -112,10 +114,11 @@ delta_rrl_time(isc_stdtime_t ts, isc_stdtime_t now) {
 	delta = now - ts;
 	if (delta >= 0)
 		return (delta);
+
 	/*
-	 * Timestamps in the near future might result from re-ordered
-	 * requests, because we use timestamps on requests instead of
-	 * consulting a clock.  Timestamps in the distant future are
+	 * The timestamp is in the future.  That future might result from
+	 * re-ordered requests, because we use timestamps on requests
+	 * instead of consulting a clock.  Timestamps in the distant future are
 	 * assumed to result from clock changes.
 	 */
 	if (delta < -5)
@@ -307,16 +310,88 @@ rrl_key_cmp(const dns_rrl_key_t *a, const dns_rrl_key_t *b) {
 }
 
 /*
- * Get an entry for a response.
+ * Construct the database key.
+ * Use a hash of the DNS query name to save space in the database.
+ * Collisions result in legitimate rate limiting responses for one
+ * query name also limiting responses for other names to the
+ * same client.  This is rare and benign enough given the large
+ * space costs compared to keeping the entire name in the database
+ * entry or the time costs of dynamic allocation.
+ */
+static isc_uint32_t
+make_key(dns_rrl_t *rrl, dns_rrl_key_t *key, const isc_sockaddr_t *client_addr,
+	 dns_rdatatype_t qtype, dns_name_t *tgt_name, dns_rrl_kflags_t kflags)
+{
+	isc_uint32_t hval;
+	int i;
+
+	memset(key, 0, sizeof(*key));
+	hval = 0;
+
+	if ((kflags & (DNS_RRL_KFLAG_NXDOMAIN | DNS_RRL_KFLAG_ERROR |
+		       DNS_RRL_KFLAG_USED_TCP)) == 0) {
+		key->qtype = qtype;
+		hval += qtype;
+	}
+
+	if (tgt_name != NULL && tgt_name->labels != 0) {
+		/*
+		 * Ignore the first label of wildcards.
+		 */
+		if ((tgt_name->attributes & DNS_NAMEATTR_WILDCARD) != 0 &&
+		    (i = dns_name_countlabels(tgt_name)) > 1) {
+			dns_fixedname_t suffixf;
+			dns_name_t *suffix;
+
+			dns_fixedname_init(&suffixf);
+			suffix = dns_fixedname_name(&suffixf);
+			dns_name_split(tgt_name, i-1, NULL, suffix);
+			key->name = dns_name_hashbylabel(suffix, ISC_FALSE);
+		} else {
+			key->name = dns_name_hashbylabel(tgt_name, ISC_FALSE);
+		}
+		hval += key->name;
+	}
+
+	switch (client_addr->type.sa.sa_family) {
+	case AF_INET:
+		key->ip[3] = (client_addr->type.sin.sin_addr.s_addr &
+			      rrl->ipv4_mask);
+		hval = (hval>>31) + (hval<<1) + key->ip[3];
+		break;
+	case AF_INET6:
+		key->kflags |= DNS_RRL_KFLAG_IPV6;
+		memcpy(key->ip, &client_addr->type.sin6.sin6_addr,
+		       sizeof(key->ip));
+		for (i = 0; i < 4; ++i) {
+			key->ip[i] &= rrl->ipv6_mask[i];
+			hval = (hval>>31) + (hval<<1) + key->ip[i];
+		}
+		break;
+	}
+
+	hval += key->kflags;
+
+	return (hval);
+}
+
+/*
+ * Search for an entry for a response and optionally create it.
  */
 static dns_rrl_entry_t *
-get_rrl_entry(dns_rrl_t *rrl, const dns_rrl_key_t *key, isc_uint32_t hval,
-	      isc_stdtime_t now)
+get_rrl_entry(dns_rrl_t *rrl, const isc_sockaddr_t *client_addr,
+	      dns_rdatatype_t qtype, dns_name_t *tgt_name,
+	      dns_rrl_kflags_t kflags, isc_stdtime_t now,
+	      isc_boolean_t create)
 {
+	dns_rrl_key_t key;
+	isc_uint32_t hval;
 	dns_rrl_hash_t *hash, *old_hash;
 	dns_rrl_entry_t *e;
 	dns_rrl_bin_t *new_bin, *old_bin;
 	int probes, secs, balance;
+
+	hval = make_key(rrl, &key, client_addr, qtype, tgt_name, kflags);
 
 	/*
 	 * Look for the entry in the current hash table.
@@ -326,7 +401,7 @@ get_rrl_entry(dns_rrl_t *rrl, const dns_rrl_key_t *key, isc_uint32_t hval,
 	for (e = ISC_LIST_HEAD(*new_bin), probes = 1;
 	     e != NULL;
 	     e = ISC_LIST_NEXT(e, hlink), ++probes) {
-		if (rrl_key_cmp(&e->key, key)) {
+		if (rrl_key_cmp(&e->key, &key)) {
 			rrl_entry_ref(rrl, e, new_bin, probes, now);
 			return (e);
 		}
@@ -341,7 +416,7 @@ get_rrl_entry(dns_rrl_t *rrl, const dns_rrl_key_t *key, isc_uint32_t hval,
 		for (e = ISC_LIST_HEAD(*old_bin);
 		     e != NULL;
 		     e = ISC_LIST_NEXT(e, hlink)) {
-			if (rrl_key_cmp(&e->key, key)) {
+			if (rrl_key_cmp(&e->key, &key)) {
 				rrl_entry_ref(rrl, e, new_bin, probes, now);
 				return (e);
 			}
@@ -354,10 +429,13 @@ get_rrl_entry(dns_rrl_t *rrl, const dns_rrl_key_t *key, isc_uint32_t hval,
 			free_old_hash(rrl);
 	}
 
+	if (!create)
+		return (NULL);
+
 	/*
 	 * The block does not already exist, so create it.
 	 * Unroll the first circuit of the loop to cover most cases.
-	 * Immediately create entries more if the oldest is fresh.
+	 * Immediately a new create entry if the oldest is fresh.
 	 * Preserve penalized entries.
 	 * Try to make more entries if none are idle.
 	 * Steal the oldest entry if we cannot make more.
@@ -376,7 +454,9 @@ get_rrl_entry(dns_rrl_t *rrl, const dns_rrl_key_t *key, isc_uint32_t hval,
 			balance = e->responses;
 			if (balance >= 0)
 				break;
-			if ((e->key.flags & DNS_RRL_FLAG_ERROR) != 0) {
+			if ((e->key.kflags & DNS_RRL_KFLAG_NXDOMAIN) != 0) {
+				balance += secs * rrl->nxdomains_per_second;
+			} else if ((e->key.kflags & DNS_RRL_KFLAG_ERROR) != 0) {
 				balance += secs * rrl->errors_per_second;
 			} else {
 				balance += secs * rrl->responses_per_second;
@@ -395,151 +475,390 @@ get_rrl_entry(dns_rrl_t *rrl, const dns_rrl_key_t *key, isc_uint32_t hval,
 			secs = delta_rrl_time(e->last_used, now);
 		}
 	}
-	e->key = *key;
+	e->key = key;
 	e->last_used = 0;
-	e->slip_cnt = 0;
 	rrl_entry_ref(rrl, e, new_bin, probes, now);
 	return (e);
 }
 
-static dns_rrl_result_t
-inc_rrl_entry(dns_rrl_t *rrl, dns_rrl_entry_t *e, isc_stdtime_t now) {
-	int rate, secs, min;
-	dns_rrl_result_t result;
+static inline dns_rrl_result_t
+debit_rrl_entry(dns_rrl_t *rrl, dns_rrl_entry_t *e, double qps, double scale,
+		const isc_sockaddr_t *client_addr, isc_stdtime_t now,
+		isc_boolean_t *old)
+{
+	int rate, new_rate, *ratep, slip, new_slip, secs, log_secs, min;
+	const char *rate_str;
+	dns_rrl_entry_t const *credit_e;
+	dns_rrl_result_t rrl_result;
 
-	if ((e->key.flags & DNS_RRL_FLAG_ERROR) != 0) {
+	/*
+	 * Optionally adjust the rates by the estimated query/second rate.
+	 */
+	if ((e->key.kflags & DNS_RRL_KFLAG_NXDOMAIN) != 0) {
+		rate = rrl->nxdomains_per_second;
+		ratep = &rrl->scaled_nxdomains_per_second;
+	} else if ((e->key.kflags & DNS_RRL_KFLAG_ERROR) != 0) {
 		rate = rrl->errors_per_second;
+		ratep = &rrl->scaled_errors_per_second;
 	} else {
 		rate = rrl->responses_per_second;
+		ratep = &rrl->scaled_responses_per_second;
 	}
 	if (rate == 0)
 		return (DNS_RRL_RESULT_OK);
 
-	/*
-	 * Treat time jumps into the past as no time.
-	 * Treat entries older than the window as if they were just created
-	 * without overflow.
-	 * Credit other entries.
-	 */
-	result = DNS_RRL_RESULT_NEW_DROP;
-	secs = delta_rrl_time(e->last_used, now);
-	if (secs <= 0) {
-		secs = 0;
-		if (e->responses < 0)
-			result = DNS_RRL_RESULT_OLD_DROP;
-	} else if (secs > rrl->window) {
-		e->responses = rate;
-	} else {
-		e->responses += rate*secs;
-		if (e->responses > rate)
-			e->responses = rate;
-		if (e->responses <= 0)
-			result = DNS_RRL_RESULT_OLD_DROP;
+	if (scale < 1.0) {
+		/*
+		 * The limit for clients that have used TCP is not scaled.
+		 */
+		credit_e = get_rrl_entry(rrl, client_addr, dns_rdatatype_none,
+					 NULL, DNS_RRL_KFLAG_USED_TCP,
+					 now, ISC_FALSE);
+		if (credit_e != NULL) {
+			secs = delta_rrl_time(credit_e->last_used, now);
+			if (secs < rrl->window)
+				scale = 1.0;
+		}
 	}
-	e->last_used = now;
-
-#if 0
-	isc_log_write(dns_lctx, DNS_LOGCATEGORY_RRL,
-		      DNS_LOGMODULE_REQUEST, DNS_RRL_LOG_DEBUG3,
-		      "rrl secs=%d  responses=%d", secs, e->responses);
-#endif
-	if (--e->responses >= 0) {
-		e->slip_cnt = 0;
-		return (DNS_RRL_RESULT_OK);
+	if (scale < 1.0) {
+		new_rate = rate * scale;
+		if (new_rate < 1)
+			new_rate = 1;
+		if (*ratep != new_rate) {
+			if (isc_log_wouldlog(dns_lctx, DNS_RRL_LOG_DEBUG2)) {
+				if ((e->key.kflags &
+				     DNS_RRL_KFLAG_NXDOMAIN) != 0) {
+					rate_str = "nxdomains-per-second";
+				} else if ((e->key.kflags &
+					    DNS_RRL_KFLAG_ERROR) != 0) {
+					rate_str = "errors-per-second";
+				} else {
+					rate_str = "responses-per-second";
+				}
+				isc_log_write(dns_lctx, DNS_LOGCATEGORY_RRL,
+					      DNS_LOGMODULE_REQUEST,
+					      DNS_RRL_LOG_DEBUG2,
+					      "%d qps scaled %s by %.2f"
+					      " from %d to %d",
+					      (int)qps, rate_str, scale,
+					      rate, new_rate);
+			}
+			rate = new_rate;
+			*ratep = rate;
+		}
 	}
 
 	min = -rrl->window * rate;
+
+	/*
+	 * Treat time jumps into the past as no time.
+	 * Treat entries older than the window as if they were just created
+	 * Credit other entries.
+	 */
+	rrl_result = DNS_RRL_RESULT_DROP;
+	*old = ISC_FALSE;
+	secs = delta_rrl_time(e->last_used, now);
+	if (secs <= 0) {
+		if (e->responses < 0)
+			*old = ISC_TRUE;
+	} else {
+		/*
+		 * Credit tokens earned during elapsed time.
+		 */
+		if (secs > rrl->window) {
+			e->log_secs = DNS_RRL_MAX_LOG_SECS;
+			e->responses = rate;
+			e->slip_cnt = 0;
+		} else {
+			e->responses += rate*secs;
+			if (e->responses > rate) {
+				e->log_secs = DNS_RRL_MAX_LOG_SECS;
+				e->responses = rate;
+				e->slip_cnt = 0;
+			} else if (e->responses <= 0) {
+				*old = ISC_TRUE;
+			}
+		}
+		/*
+		 * Find the seconds since last log message without overflowing
+		 * small counter.
+		 * This counter should be reset when an entry is create (or
+		 * recycled) and after at least one second without limiting.
+		 * It is not necessarily reset when some requests are answered
+		 * provided other requests continue to be dropped or slipped.
+		 * This can happen when the request rate is just at the limit.
+		 */
+		log_secs = e->log_secs;
+		log_secs += secs;
+		if (log_secs > DNS_RRL_MAX_LOG_SECS || log_secs < 0)
+			log_secs = DNS_RRL_MAX_LOG_SECS;
+		e->log_secs = log_secs;
+	}
+	e->last_used = now;
+
+	if (isc_log_wouldlog(dns_lctx, DNS_RRL_LOG_DEBUG3))
+		isc_log_write(dns_lctx, DNS_LOGCATEGORY_RRL,
+			      DNS_LOGMODULE_REQUEST, DNS_RRL_LOG_DEBUG3,
+			      "rrl secs=%d  responses=%d", secs, e->responses);
+
+	/*
+	 * Debit the entry for this response.
+	 */
+	if (--e->responses >= 0)
+		return (DNS_RRL_RESULT_OK);
+
 	if (e->responses < min)
 		e->responses = min;
 
 	/*
 	 * Drop this response unless it should leak.
 	 */
-	if (rrl->slip != 0 && ++e->slip_cnt >= rrl->slip) {
+	slip = rrl->slip;
+	if (slip > 2 && scale < 1.0) {
+		new_slip *= scale;
+		if (new_slip < 2)
+			new_slip = 2;
+		if (rrl->scaled_slip != new_slip) {
+			if (isc_log_wouldlog(dns_lctx, DNS_RRL_LOG_DEBUG2))
+				isc_log_write(dns_lctx, DNS_LOGCATEGORY_RRL,
+					      DNS_LOGMODULE_REQUEST,
+					      DNS_RRL_LOG_DEBUG2,
+					      "%d qps scaled slip"
+					      " by %.2f from %d to %d",
+					      (int)qps, scale,
+					      slip, new_slip);
+			slip = new_slip;
+			rrl->scaled_slip = slip;
+		}
+	}
+	if (slip != 0 && ++e->slip_cnt >= slip) {
 		e->slip_cnt = 0;
 		return (DNS_RRL_RESULT_SLIP);
 	}
 
-	return (result);
+	return (rrl_result);
 }
 
+/*
+ * Build a string for the logs.
+ * The caller has already checked to see that this is necessary.
+ * The number of responses dropped or slipped is not included in the
+ * message, because it would be inaccurate.  There is no log message
+ * when an entry is recycled even if some responses have been dropped
+ * or slipped.  Each entry would also be 8 bytes larger for counts
+ * of dropped and slipped responses.
+ */
+static void
+dns_rrl_log_str(const dns_rrl_t *rrl, dns_rrl_entry_t *e, isc_boolean_t old,
+		dns_rdatatype_t qtype, dns_name_t *tgt_name,
+		char *ws_buf, int ws_buf_len,
+		char *client_buf, int client_buf_len,
+		char *tgt_name_buf, int tgt_name_buf_len)
+{
+	isc_netaddr_t cidr;
+	char cidr_buf[ISC_NETADDR_FORMATSIZE];
+	char qtype_buf[DNS_RDATATYPE_FORMATSIZE];
+	const char *for_str, *for2_str;
+	int prefixlen;
+
+	snprintf(ws_buf, ws_buf_len, "%s%s",
+		 rrl->log_only ? "would " : "",
+		 old ? "continue " : "");
+
+	memset(&cidr, 0, sizeof(cidr));
+	if ((e->key.kflags & DNS_RRL_KFLAG_IPV6) == 0) {
+		prefixlen = rrl->ipv4_prefixlen;
+		cidr.family = AF_INET;
+		cidr.type.in.s_addr = e->key.ip[3];
+	} else {
+		prefixlen = rrl->ipv6_prefixlen;
+		cidr.family = AF_INET6;
+		memcpy(&cidr.type.in6, e->key.ip, sizeof(cidr.type.in6));
+	}
+	isc_netaddr_format(&cidr, cidr_buf, sizeof(cidr_buf));
+
+	if (tgt_name == NULL || !dns_name_isabsolute(tgt_name)) {
+		for_str = "";
+		qtype_buf[0] = '\0';
+		for2_str = "";
+		tgt_name_buf[0] = '\0';
+	} else {
+		for_str = " for IN ";
+		dns_rdatatype_format(qtype, qtype_buf, sizeof(qtype_buf));
+		for2_str = " ";
+		dns_name_format(tgt_name, tgt_name_buf, tgt_name_buf_len);
+	}
+
+	snprintf(client_buf, client_buf_len, "%s/%d%s%s%s",
+		 cidr_buf, prefixlen,
+		 for_str, qtype_buf, for2_str);
+}
+
+static void
+log_sub(int level, dns_rcode_t rcode, const char *log_ws_buf,
+	const char *log_client_buf, const char *tgt_name_buf)
+{
+	const char *err_str;
+
+	if (rcode == dns_rcode_noerror)
+		err_str = "";
+	else if (rcode == dns_rcode_nxdomain)
+		err_str = "NXDOMAIN ";
+	else
+		err_str = "error ";
+	isc_log_write(dns_lctx, DNS_LOGCATEGORY_RRL,
+		      DNS_LOGMODULE_REQUEST, level,
+		      "%slimiting %sresponses to %s%s",
+		      log_ws_buf, err_str,
+		      log_client_buf, tgt_name_buf);
+}
+
+/*
+ * Main rate limit interface.
+ */
 dns_rrl_result_t
 dns_rrl(dns_rrl_t *rrl, const isc_sockaddr_t *client_addr,
-	dns_rdataclass_t class, dns_rdatatype_t qtype, dns_name_t *fname,
-	isc_boolean_t is_error, isc_stdtime_t now)
+	dns_rdataclass_t rdclass, dns_rdatatype_t qtype,
+	dns_name_t *tgt_name, dns_rcode_t rcode, isc_stdtime_t now,
+	isc_boolean_t wouldlog, isc_boolean_t is_tcp,
+	char *log_ws_buf, int log_ws_buf_len,
+	char *log_client_buf, int log_client_buf_len,
+	char *tgt_name_buf, int tgt_name_buf_len)
 {
-	dns_rrl_key_t key;
-	isc_uint32_t hval;
+	dns_rrl_kflags_t kflags;
 	dns_rrl_entry_t *e;
+	isc_netaddr_t netclient;
+	int secs;
+	double qps, scale;
+	int exempt_match;
+	isc_result_t result;
+	isc_boolean_t old;
 	dns_rrl_result_t rrl_result;
-	int i;
 
-	/*
-	 * Construct the database key.
-	 * Use a hash of the DNS query name to save space in the database.
-	 * Collisions result in legitimate rate limiting responses for one
-	 * query name also limiting responses for other names to the
-	 * same client.  This is rare and benign enough given the large
-	 * space costs compared to keeping the entire name in the database
-	 * entry or the time costs of dynamic allocation.
-	 */
-	memset(&key, 0, sizeof(key));
-	key.type = qtype;
-	hval = qtype;
-	if (fname != NULL && fname->labels != 0) {
-		/*
-		 * Ignore the first label of wildcards.
-		 */
-		if ((fname->attributes & DNS_NAMEATTR_WILDCARD) != 0 &&
-		    (i = dns_name_countlabels(fname)) > 1) {
-			dns_fixedname_t suffixf;
-			dns_name_t *suffix;
+	INSIST(log_ws_buf != NULL && log_ws_buf_len > 0);
+	INSIST(log_client_buf != NULL && log_client_buf_len > 0);
+	INSIST(tgt_name_buf != NULL && tgt_name_buf_len > 0);
 
-			dns_fixedname_init(&suffixf);
-			suffix = dns_fixedname_name(&suffixf);
-			dns_name_split(fname, i-1, NULL, suffix);
-			key.name = dns_name_hashbylabel(suffix, ISC_FALSE);
-		} else {
-			key.name = dns_name_hashbylabel(fname, ISC_FALSE);
-		}
-		hval += key.name;
+	if (rrl->exempt != NULL) {
+		isc_netaddr_fromsockaddr(&netclient, client_addr);
+		result = dns_acl_match(&netclient, NULL, rrl->exempt,
+				       NULL, &exempt_match, NULL);
+		if (result == ISC_R_SUCCESS && exempt_match > 0)
+			return DNS_RRL_RESULT_OK;
 	}
-	switch (client_addr->type.sa.sa_family) {
-	case AF_INET:
-		key.ip[3] = (client_addr->type.sin.sin_addr.s_addr &
-			     rrl->ipv4_mask);
-		hval = (hval>>31) + (hval<<1) + key.ip[3];
-		break;
-	case AF_INET6:
-		memcpy(key.ip, &client_addr->type.sin6.sin6_addr,
-		       sizeof(key.ip));
-		for (i = 0; i < 4; ++i) {
-			key.ip[i] &= rrl->ipv6_mask[i];
-			hval = (hval>>31) + (hval<<1) + key.ip[i];
-		}
-		break;
-	}
-	if (is_error)
-		key.flags |= DNS_RRL_FLAG_ERROR;
-	if (class != dns_rdataclass_in)
-		key.flags |= DNS_RRL_FLAG_NOT_IN;
-	hval += key.flags;
 
 	LOCK(&rrl->lock);
+	if (rrl->qps_scale == 0) {
+		qps = 0.0;
+		scale = 1.0;
+	} else {
+		++rrl->qps_responses;
+		secs = delta_rrl_time(rrl->qps_time, now);
+		if (secs <= 0) {
+			qps = rrl->qps;
+		} else {
+			qps = (1.0*rrl->qps_responses) / secs;
+			if (secs >= rrl->window) {
+				if (isc_log_wouldlog(dns_lctx,
+						     DNS_RRL_LOG_DEBUG3))
+					isc_log_write(dns_lctx,
+						      DNS_LOGCATEGORY_RRL,
+						      DNS_LOGMODULE_REQUEST,
+						      DNS_RRL_LOG_DEBUG3,
+						      "%d responses/%d seconds"
+						      " = %d qps",
+						      rrl->qps_responses,
+						      secs, (int)qps);
+				rrl->qps = qps;
+				rrl->qps_responses = 0;
+				rrl->qps_time = now;
+			} else if (qps < rrl->qps) {
+				qps = rrl->qps;
+			}
+		}
+		scale = rrl->qps_scale / qps;
+	}
+
+	/*
+	 * Notice TCP requests when scaling limits by qps.
+	 */
+	if (is_tcp) {
+		if (scale < 1.0) {
+			e = get_rrl_entry(rrl, client_addr, dns_rdatatype_none,
+					  NULL, DNS_RRL_KFLAG_USED_TCP,
+					  now, ISC_TRUE);
+			if (e != NULL) {
+				e->responses = 1;
+				e->last_used = now;
+			}
+		}
+		UNLOCK(&rrl->lock);
+		return (ISC_R_SUCCESS);
+	}
 
 	/*
 	 * Find the entry and create it if necessary.
-	 * If that is impossible, then there is nothing our caller can do.
+	 * If that is impossible, then nothing more can be done
 	 */
-	e = get_rrl_entry(rrl, &key, hval, now);
+	if (rcode == dns_rcode_noerror)
+		kflags = 0;
+	else if (rcode == dns_rcode_nxdomain)
+		kflags = DNS_RRL_KFLAG_NXDOMAIN;
+	else
+		kflags = DNS_RRL_KFLAG_ERROR;
+	if (rdclass != dns_rdataclass_in)
+		kflags |= DNS_RRL_KFLAG_NOT_IN;
+	e = get_rrl_entry(rrl, client_addr, qtype, tgt_name, kflags,
+			  now, ISC_TRUE);
 	if (e == NULL) {
 		UNLOCK(&rrl->lock);
 		return (DNS_RRL_RESULT_OK);
 	}
 
-	rrl_result = inc_rrl_entry(rrl, e, now);
+	/*
+	 * Do not worry about speed or lock with logging this high.
+	 */
+	if (isc_log_wouldlog(dns_lctx, DNS_RRL_LOG_DEBUG3)) {
+		dns_rrl_log_str(rrl, e, old, qtype, tgt_name,
+				log_ws_buf, log_ws_buf_len,
+				log_client_buf, log_client_buf_len,
+				tgt_name_buf, tgt_name_buf_len);
+		log_sub(DNS_RRL_LOG_DEBUG3, rcode,
+			"possibly ", log_client_buf, tgt_name_buf);
+	}
 
-	UNLOCK(&rrl->lock);
+	rrl_result = debit_rrl_entry(rrl, e, qps, scale,
+				     client_addr, now, &old);
+	if (rrl_result == DNS_RRL_RESULT_OK) {
+		UNLOCK(&rrl->lock);
+		return (DNS_RRL_RESULT_OK);
+	}
+
+	if (wouldlog || (e->log_secs >= DNS_RRL_MAX_LOG_SECS &&
+			 isc_log_wouldlog(dns_lctx, DNS_RRL_LOG_DROP))) {
+		dns_rrl_log_str(rrl, e, old, qtype, tgt_name,
+				log_ws_buf, log_ws_buf_len,
+				log_client_buf, log_client_buf_len,
+				tgt_name_buf, tgt_name_buf_len);
+	} else {
+		log_ws_buf[0] = '\0';
+		log_client_buf[0] = '\0';
+		tgt_name_buf[0] = '\0';
+	}
+
+	/*
+	 * Log occassionally in the rate-limit category,
+	 * without holding the lock.
+	 */
+	if (e->log_secs >= DNS_RRL_MAX_LOG_SECS) {
+		e->log_secs = 0;
+		UNLOCK(&rrl->lock);
+		if (isc_log_wouldlog(dns_lctx, DNS_RRL_LOG_DROP))
+			log_sub(DNS_RRL_LOG_DROP, rcode,
+				log_ws_buf, log_client_buf, tgt_name_buf);
+	} else {
+		UNLOCK(&rrl->lock);
+	}
 	return (rrl_result);
 }
 
@@ -557,6 +876,10 @@ dns_rrl_view_destroy(dns_view_t *view) {
 	/*
 	 * Assume the caller takes care of locking the view and anything else.
 	 */
+
+	if (rrl->exempt != NULL)
+		dns_acl_detach(&rrl->exempt);
+
 	DESTROYLOCK(&rrl->lock);
 
 	while (!ISC_LIST_EMPTY(rrl->blocks)) {
