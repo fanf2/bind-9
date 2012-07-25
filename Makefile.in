@@ -59,7 +59,6 @@ install:: isc-config.sh installdirs
 	${INSTALL_DATA} ${top_srcdir}/isc-config.sh.1 ${DESTDIR}${mandir}/man1
 	rm -f ${DESTDIR}${mandir}/man1/bind9-config.1
 	@LN@ ${DESTDIR}${mandir}/man1/isc-config.sh.1 ${DESTDIR}${mandir}/man1/bind9-config.1
-	${INSTALL_DATA} ${top_srcdir}/bind.keys ${DESTDIR}${sysconfdir}
 
 tags:
 	rm -f TAGS
