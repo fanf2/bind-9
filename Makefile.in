@@ -55,7 +55,6 @@ installdirs:
 install:: isc-config.sh installdirs
 	${INSTALL_SCRIPT} isc-config.sh ${DESTDIR}${bindir}
 	${INSTALL_DATA} ${top_srcdir}/isc-config.sh.1 ${DESTDIR}${mandir}/man1
-	${INSTALL_DATA} ${top_srcdir}/bind.keys ${DESTDIR}${sysconfdir}
 
 tags:
 	rm -f TAGS
