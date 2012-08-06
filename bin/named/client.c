@@ -1143,7 +1143,7 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 		dns_rrl_result_t rrl_result;
 
 		wouldlog = isc_log_wouldlog(ns_g_lctx, DNS_RRL_LOG_DROP);
-		rrl_result = dns_rrl(client->view->rrl, &client->peeraddr,
+		rrl_result = dns_rrl(client->view, &client->peeraddr,
 				     dns_rdataclass_in, dns_rdatatype_none,
 				     NULL, rcode, client->now, wouldlog,
 				     TCP_CLIENT(client),

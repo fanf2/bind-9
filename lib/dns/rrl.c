@@ -717,7 +717,7 @@ log_sub(int level, dns_rcode_t rcode, const char *log_ws_buf,
  * Main rate limit interface.
  */
 dns_rrl_result_t
-dns_rrl(dns_rrl_t *rrl, const isc_sockaddr_t *client_addr,
+dns_rrl(dns_view_t *view, const isc_sockaddr_t *client_addr,
 	dns_rdataclass_t rdclass, dns_rdatatype_t qtype,
 	dns_name_t *tgt_name, dns_rcode_t rcode, isc_stdtime_t now,
 	isc_boolean_t wouldlog, isc_boolean_t is_tcp,
@@ -725,6 +725,7 @@ dns_rrl(dns_rrl_t *rrl, const isc_sockaddr_t *client_addr,
 	char *log_client_buf, int log_client_buf_len,
 	char *tgt_name_buf, int tgt_name_buf_len)
 {
+	dns_rrl_t *rrl;
 	dns_rrl_kflags_t kflags;
 	dns_rrl_entry_t *e;
 	isc_netaddr_t netclient;
@@ -739,10 +740,11 @@ dns_rrl(dns_rrl_t *rrl, const isc_sockaddr_t *client_addr,
 	INSIST(log_client_buf != NULL && log_client_buf_len > 0);
 	INSIST(tgt_name_buf != NULL && tgt_name_buf_len > 0);
 
+	rrl = view->rrl;
 	if (rrl->exempt != NULL) {
 		isc_netaddr_fromsockaddr(&netclient, client_addr);
 		result = dns_acl_match(&netclient, NULL, rrl->exempt,
-				       NULL, &exempt_match, NULL);
+				       &view->aclenv, &exempt_match, NULL);
 		if (result == ISC_R_SUCCESS && exempt_match > 0)
 			return DNS_RRL_RESULT_OK;
 	}

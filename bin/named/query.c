@@ -5736,7 +5736,7 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 			rcode = dns_rcode_noerror;
 			err_str = "";
 		}
-		rrl_result = dns_rrl(client->view->rrl, &client->peeraddr,
+		rrl_result = dns_rrl(client->view, &client->peeraddr,
 				     client->message->rdclass, qtype, tname,
 				     rcode, client->now, wouldlog,
 				     ISC_TF((client->attributes

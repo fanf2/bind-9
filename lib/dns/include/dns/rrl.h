@@ -155,7 +155,7 @@ typedef enum {
 } dns_rrl_result_t;
 
 dns_rrl_result_t
-dns_rrl(dns_rrl_t *rrl, const isc_sockaddr_t *client_addr,
+dns_rrl(dns_view_t *view, const isc_sockaddr_t *client_addr,
 	dns_rdataclass_t rdclass, dns_rdatatype_t qtype,
 	dns_name_t *fname, dns_rcode_t rcode, isc_stdtime_t now,
 	isc_boolean_t wouldlog, isc_boolean_t is_tcp,
