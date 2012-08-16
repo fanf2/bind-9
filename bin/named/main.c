@@ -420,7 +420,7 @@ parse_command_line(int argc, char *argv[]) {
 	/* PLEASE keep options synchronized when main is hooked! */
 	isc_commandline_errprint = ISC_FALSE;
 	while ((ch = isc_commandline_parse(argc, argv,
-					   "46c:C:d:D:E:fFgi:lm:n:N:p:P:"
+					   "46c:C:d:D:E:fFgi:lL:m:n:N:p:P:"
 					   "sS:t:T:U:u:vVx:")) != -1) {
 		switch (ch) {
 		case '4':
@@ -475,6 +475,9 @@ parse_command_line(int argc, char *argv[]) {
 			break;
 		case 'l':
 			ns_g_lwresdonly = ISC_TRUE;
+			break;
+		case 'L':
+			ns_g_logfile = isc_commandline_argument;
 			break;
 		case 'm':
 			set_flags(isc_commandline_argument, mem_debug_flags,
