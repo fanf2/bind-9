@@ -5273,7 +5273,7 @@ del_sigs(dns_zone_t *zone, dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 }
 
 static isc_result_t
-add_sigs(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
+add_sigs(dns_zone_t *zone, dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	 dns_rdatatype_t type, dns_diff_t *diff, dst_key_t **keys,
 	 unsigned int nkeys, isc_mem_t *mctx, isc_stdtime_t inception,
 	 isc_stdtime_t expire, isc_boolean_t check_ksk,
@@ -5294,6 +5294,9 @@ add_sigs(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 		result = dns_db_findnsec3node(db, name, ISC_FALSE, &node);
 	else
 		result = dns_db_findnode(db, name, ISC_FALSE, &node);
+	dns_zone_log(zone, ISC_LOG_ERROR,
+		     "add_sigs:dns_db_findnode: %s",
+		     dns_result_totext(result));
 	if (result == ISC_R_NOTFOUND)
 		return (ISC_R_SUCCESS);
 	if (result != ISC_R_SUCCESS)
@@ -5301,6 +5304,9 @@ add_sigs(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	result = dns_db_findrdataset(db, node, ver, type, 0,
 				     (isc_stdtime_t) 0, &rdataset, NULL);
 	dns_db_detachnode(db, &node);
+	dns_zone_log(zone, ISC_LOG_ERROR,
+		     "add_sigs:dns_db_findrdataset: %s",
+		     dns_result_totext(result));
 	if (result == ISC_R_NOTFOUND) {
 		INSIST(!dns_rdataset_isassociated(&rdataset));
 		return (ISC_R_SUCCESS);
@@ -5350,17 +5356,29 @@ add_sigs(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 
 		/* Calculate the signature, creating a RRSIG RDATA. */
 		isc_buffer_clear(&buffer);
-		CHECK(dns_dnssec_sign(name, &rdataset, keys[i],
-				      &inception, &expire,
-				      mctx, &buffer, &sig_rdata));
+		result = dns_dnssec_sign(name, &rdataset, keys[i],
+					 &inception, &expire,
+					 mctx, &buffer, &sig_rdata);
+		dns_zone_log(zone, ISC_LOG_ERROR,
+			     "add_sigs:dns_dnssec_sign: %s",
+			     dns_result_totext(result));
+		if (result != ISC_R_SUCCESS)
+			goto failure;
 		/* Update the database and journal with the RRSIG. */
 		/* XXX inefficient - will cause dataset merging */
-		CHECK(update_one_rr(db, ver, diff, DNS_DIFFOP_ADDRESIGN,
-				    name, rdataset.ttl, &sig_rdata));
+		result = update_one_rr(db, ver, diff, DNS_DIFFOP_ADDRESIGN,
+				       name, rdataset.ttl, &sig_rdata);
+		dns_zone_log(zone, ISC_LOG_ERROR,
+			     "add_sigs:update_one_rr: %s",
+			     dns_result_totext(result));
+		if (result != ISC_R_SUCCESS)
+			goto failure;
 		dns_rdata_reset(&sig_rdata);
 		isc_buffer_init(&buffer, data, sizeof(data));
 	}
 
+	dns_zone_log(zone, ISC_LOG_ERROR,
+		     "add_sigs: %s", dns_result_totext(result));
  failure:
 	if (dns_rdataset_isassociated(&rdataset))
 		dns_rdataset_disassociate(&rdataset);
@@ -5473,7 +5491,7 @@ zone_resigninc(dns_zone_t *zone) {
 			break;
 		}
 
-		result = add_sigs(db, version, name, covers, &sig_diff,
+		result = add_sigs(zone, db, version, name, covers, &sig_diff,
 				  zone_keys, nkeys, zone->mctx, inception,
 				  expire, check_ksk, keyset_kskonly);
 		if (result != ISC_R_SUCCESS) {
@@ -5526,7 +5544,7 @@ zone_resigninc(dns_zone_t *zone) {
 	 * Generate maximum life time signatures so that the above loop
 	 * termination is sensible.
 	 */
-	result = add_sigs(db, version, &zone->origin, dns_rdatatype_soa,
+	result = add_sigs(zone, db, version, &zone->origin, dns_rdatatype_soa,
 			  &sig_diff, zone_keys, nkeys, zone->mctx, inception,
 			  soaexpire, check_ksk, keyset_kskonly);
 	if (result != ISC_R_SUCCESS) {
@@ -6237,7 +6255,7 @@ update_sigs(dns_diff_t *diff, dns_db_t *db, dns_dbversion_t *version,
 				     dns_result_totext(result));
 			return (result);
 		}
-		result = add_sigs(db, version, &tuple->name,
+		result = add_sigs(zone, db, version, &tuple->name,
 				  tuple->rdata.type, sig_diff,
 				  zone_keys, nkeys, zone->mctx, inception,
 				  expire, check_ksk, keyset_kskonly);
@@ -6903,7 +6921,7 @@ zone_nsec3chain(dns_zone_t *zone) {
 		goto failure;
 	}
 
-	result = add_sigs(db, version, &zone->origin, dns_rdatatype_soa,
+	result = add_sigs(zone, db, version, &zone->origin, dns_rdatatype_soa,
 			  &sig_diff, zone_keys, nkeys, zone->mctx, inception,
 			  soaexpire, check_ksk, keyset_kskonly);
 	if (result != ISC_R_SUCCESS) {
@@ -7470,7 +7488,7 @@ zone_sign(dns_zone_t *zone) {
 	 * Generate maximum life time signatures so that the above loop
 	 * termination is sensible.
 	 */
-	result = add_sigs(db, version, &zone->origin, dns_rdatatype_soa,
+	result = add_sigs(zone, db, version, &zone->origin, dns_rdatatype_soa,
 			  &sig_diff, zone_keys, nkeys, zone->mctx, inception,
 			  soaexpire, check_ksk, keyset_kskonly);
 	if (result != ISC_R_SUCCESS) {
@@ -15225,7 +15243,7 @@ sign_apex(dns_zone_t *zone, dns_db_t *db, dns_dbversion_t *ver,
 				     dns_result_totext(result));
 			goto failure;
 		}
-		result = add_sigs(db, ver, &zone->origin, dns_rdatatype_dnskey,
+		result = add_sigs(zone, db, ver, &zone->origin, dns_rdatatype_dnskey,
 				  sig_diff, zone_keys, nkeys, zone->mctx,
 				  inception, soaexpire, check_ksk,
 				  keyset_kskonly);

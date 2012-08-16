@@ -254,6 +254,9 @@ dns_dnssec_sign(dns_name_t *name, dns_rdataset_t *set, dst_key_t *key,
 	sig.timeexpire = *expire;
 	sig.keyid = dst_key_id(key);
 	ret = dst_key_sigsize(key, &sigsize);
+	isc_log_write(dns_lctx, DNS_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_DNSSEC, ISC_LOG_ERROR,
+		      "dst_key_sigsize: %s", dns_result_totext(ret));
 	if (ret != ISC_R_SUCCESS)
 		return (ret);
 	sig.siglen = sigsize;
@@ -283,6 +286,9 @@ dns_dnssec_sign(dns_name_t *name, dns_rdataset_t *set, dst_key_t *key,
 	 * Digest the SIG rdata.
 	 */
 	ret = digest_sig(ctx, ISC_FALSE, &tmpsigrdata, &sig);
+	isc_log_write(dns_lctx, DNS_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_DNSSEC, ISC_LOG_ERROR,
+		      "digest_sig: %s", dns_result_totext(ret));
 	if (ret != ISC_R_SUCCESS)
 		goto cleanup_context;
 
@@ -302,6 +308,9 @@ dns_dnssec_sign(dns_name_t *name, dns_rdataset_t *set, dst_key_t *key,
 	isc_buffer_putuint32(&envbuf, set->ttl);
 
 	ret = rdataset_to_sortedarray(set, mctx, &rdatas, &nrdatas);
+	isc_log_write(dns_lctx, DNS_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_DNSSEC, ISC_LOG_ERROR,
+		      "rdataset_to_sortedarray: %s", dns_result_totext(ret));
 	if (ret != ISC_R_SUCCESS)
 		goto cleanup_context;
 	isc_buffer_usedregion(&envbuf, &r);
@@ -339,12 +348,18 @@ dns_dnssec_sign(dns_name_t *name, dns_rdataset_t *set, dst_key_t *key,
 		 * Digest the rdata.
 		 */
 		ret = dns_rdata_digest(&rdatas[i], digest_callback, ctx);
+		isc_log_write(dns_lctx, DNS_LOGCATEGORY_GENERAL,
+			      DNS_LOGMODULE_DNSSEC, ISC_LOG_ERROR,
+			      "dns_rdata_digest: %s", dns_result_totext(ret));
 		if (ret != ISC_R_SUCCESS)
 			goto cleanup_array;
 	}
 
 	isc_buffer_init(&sigbuf, sig.signature, sig.siglen);
 	ret = dst_context_sign(ctx, &sigbuf);
+	isc_log_write(dns_lctx, DNS_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_DNSSEC, ISC_LOG_ERROR,
+		      "dst_context_sign: %s", dns_result_totext(ret));
 	if (ret != ISC_R_SUCCESS)
 		goto cleanup_array;
 	isc_buffer_usedregion(&sigbuf, &r);
@@ -356,6 +371,9 @@ dns_dnssec_sign(dns_name_t *name, dns_rdataset_t *set, dst_key_t *key,
 
 	ret = dns_rdata_fromstruct(sigrdata, sig.common.rdclass,
 				   sig.common.rdtype, &sig, buffer);
+	isc_log_write(dns_lctx, DNS_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_DNSSEC, ISC_LOG_ERROR,
+		      "dns_rdata_fromstruct: %s", dns_result_totext(ret));
 
 cleanup_array:
 	isc_mem_put(mctx, rdatas, nrdatas * sizeof(dns_rdata_t));

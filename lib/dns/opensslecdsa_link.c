@@ -31,6 +31,7 @@
 #include <isc/util.h>
 
 #include <dns/keyvalues.h>
+#include <dns/log.h>
 #include <dst/result.h>
 
 #include "dst_internal.h"
@@ -148,6 +149,9 @@ opensslecdsa_sign(dst_context_t *dctx, isc_buffer_t *sig) {
 		DST_RET(ISC_R_FAILURE);
 
 	ecdsasig = ECDSA_do_sign(digest, dgstlen, eckey);
+	isc_log_write(dns_lctx, DNS_LOGCATEGORY_GENERAL,
+		      DNS_LOGMODULE_DNSSEC, ISC_LOG_ERROR,
+		      "ECDSA_do_sign: %s", ecdsasig ? "ok" : "fail");
 	if (ecdsasig == NULL)
 		DST_RET(dst__openssl_toresult(DST_R_SIGNFAILURE));
 	BN_bn2bin_fixed(ecdsasig->r, r.base, siglen / 2);
