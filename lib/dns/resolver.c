@@ -226,6 +226,7 @@ struct fetchctx {
 	isc_sockaddrlist_t		bad;
 	isc_sockaddrlist_t		edns;
 	isc_sockaddrlist_t		edns512;
+	isc_sockaddrlist_t		edns1400;
 	isc_sockaddrlist_t		bad_edns;
 	dns_validator_t			*validator;
 	ISC_LIST(dns_validator_t)       validators;
@@ -1689,6 +1690,35 @@ add_triededns512(fetchctx_t *fctx, isc_sockaddr_t *address) {
 	ISC_LIST_INITANDAPPEND(fctx->edns512, sa, link);
 }
 
+static isc_boolean_t
+triededns1400(fetchctx_t *fctx, isc_sockaddr_t *address) {
+	isc_sockaddr_t *sa;
+
+	for (sa = ISC_LIST_HEAD(fctx->edns1400);
+	     sa != NULL;
+	     sa = ISC_LIST_NEXT(sa, link)) {
+		if (isc_sockaddr_equal(sa, address))
+			return (ISC_TRUE);
+	}
+
+	return (ISC_FALSE);
+}
+
+static void
+add_triededns1400(fetchctx_t *fctx, isc_sockaddr_t *address) {
+	isc_sockaddr_t *sa;
+
+	if (triededns1400(fctx, address))
+		return;
+
+	sa = isc_mem_get(fctx->mctx, sizeof(*sa));
+	if (sa == NULL)
+		return;
+
+	*sa = *address;
+	ISC_LIST_INITANDAPPEND(fctx->edns1400, sa, link);
+}
+
 static isc_result_t
 resquery_send(resquery_t *query) {
 	fetchctx_t *fctx;
@@ -1854,16 +1884,22 @@ resquery_send(resquery_t *query) {
 	 */
 	if (fctx->timeout) {
 		if ((triededns512(fctx, &query->addrinfo->sockaddr) ||
-		     fctx->timeouts >= (MAX_EDNS0_TIMEOUTS * 2)) &&
+		     fctx->timeouts >= (MAX_EDNS0_TIMEOUTS * 3)) &&
 		    (query->options & DNS_FETCHOPT_NOEDNS0) == 0) {
 			query->options |= DNS_FETCHOPT_NOEDNS0;
 			fctx->reason = "disabling EDNS";
-		} else if ((triededns(fctx, &query->addrinfo->sockaddr) ||
-			    fctx->timeouts >= MAX_EDNS0_TIMEOUTS) &&
+		} else if ((triededns1400(fctx, &query->addrinfo->sockaddr) ||
+			    fctx->timeouts >= MAX_EDNS0_TIMEOUTS * 2) &&
 			   (query->options & DNS_FETCHOPT_NOEDNS0) == 0) {
 			query->options |= DNS_FETCHOPT_EDNS512;
 			fctx->reason = "reducing the advertised EDNS UDP "
 				       "packet size to 512 octets";
+		} else if ((triededns(fctx, &query->addrinfo->sockaddr) ||
+			    fctx->timeouts >= MAX_EDNS0_TIMEOUTS) &&
+			   (query->options & DNS_FETCHOPT_NOEDNS0) == 0) {
+			query->options |= DNS_FETCHOPT_EDNS1400;
+			fctx->reason = "reducing the advertised EDNS UDP "
+				       "packet size to 1400 octets";
 		}
 		fctx->timeout = ISC_FALSE;
 	}
@@ -1886,6 +1922,8 @@ resquery_send(resquery_t *query) {
 			}
 			if ((query->options & DNS_FETCHOPT_EDNS512) != 0)
 				udpsize = 512;
+			else if ((query->options & DNS_FETCHOPT_EDNS1400) != 0)
+				udpsize = 1400;
 			else if (peer != NULL)
 				(void)dns_peer_getudpsize(peer, &udpsize);
 
@@ -1927,6 +1965,9 @@ resquery_send(resquery_t *query) {
 
 	if ((query->options & DNS_FETCHOPT_EDNS512) != 0)
 		add_triededns512(fctx, &query->addrinfo->sockaddr);
+
+	if ((query->options & DNS_FETCHOPT_EDNS1400) != 0)
+		add_triededns1400(fctx, &query->addrinfo->sockaddr);
 
 	/*
 	 * Clear CD if EDNS is not in use.
@@ -3173,6 +3214,14 @@ fctx_destroy(fetchctx_t *fctx) {
 		isc_mem_put(fctx->mctx, sa, sizeof(*sa));
 	}
 
+	for (sa = ISC_LIST_HEAD(fctx->edns1400);
+	     sa != NULL;
+	     sa = next_sa) {
+		next_sa = ISC_LIST_NEXT(sa, link);
+		ISC_LIST_UNLINK(fctx->edns1400, sa, link);
+		isc_mem_put(fctx->mctx, sa, sizeof(*sa));
+	}
+
 	for (sa = ISC_LIST_HEAD(fctx->bad_edns);
 	     sa != NULL;
 	     sa = next_sa) {
@@ -3571,6 +3620,7 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 	ISC_LIST_INIT(fctx->bad);
 	ISC_LIST_INIT(fctx->edns);
 	ISC_LIST_INIT(fctx->edns512);
+	ISC_LIST_INIT(fctx->edns1400);
 	ISC_LIST_INIT(fctx->bad_edns);
 	ISC_LIST_INIT(fctx->validators);
 	fctx->validator = NULL;
