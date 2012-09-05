@@ -95,7 +95,9 @@ typedef struct dns_fetchevent {
 #define DNS_FETCHOPT_NOVALIDATE		0x20	     /*%< Disable validation. */
 #define DNS_FETCHOPT_EDNS512		0x40	     /*%< Advertise a 512 byte
 							  UDP buffer. */
-#define DNS_FETCHOPT_WANTNSID           0x80         /*%< Request NSID */
+#define DNS_FETCHOPT_EDNS1400		0x80	     /*%< Advertise a 1400 byte
+							  UDP buffer. */
+#define DNS_FETCHOPT_WANTNSID           0x100        /*%< Request NSID */
 
 #define	DNS_FETCHOPT_EDNSVERSIONSET	0x00800000
 #define	DNS_FETCHOPT_EDNSVERSIONMASK	0xff000000

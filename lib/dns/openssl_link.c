@@ -287,13 +287,11 @@ dst__openssl_toresult(isc_result_t fallback) {
 	isc_result_t result = fallback;
 	int err = ERR_get_error();
 
-	switch (ERR_GET_REASON(err)) {
-	case ERR_R_MALLOC_FAILURE:
+	if (ERR_GET_REASON(err) == ERR_R_MALLOC_FAILURE)
 		result = ISC_R_NOMEMORY;
-		break;
-	default:
-		break;
-	}
+	else if (ERR_GET_LIB(err) == ERR_LIB_ECDSA &&
+		 ERR_GET_REASON(err) == ECDSA_R_RANDOM_NUMBER_GENERATION_FAILED)
+		result = ISC_R_NOENTROPY;
 	ERR_clear_error();
 	return (result);
 }
