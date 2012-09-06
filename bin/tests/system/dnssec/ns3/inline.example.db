@@ -1,4 +1,4 @@
-; Copyright (C) 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+; Copyright (C) 2012  Internet Systems Consortium, Inc. ("ISC")
 ;
 ; Permission to use, copy, modify, and/or distribute this software for any
 ; purpose with or without fee is hereby granted, provided that the above
@@ -12,7 +12,7 @@
 ; OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 ; PERFORMANCE OF THIS SOFTWARE.
 
-; $Id: expired.example.db.in,v 1.2 2011/02/08 23:10:07 tbox Exp $
+; $Id: insecure.example.db,v 1.9 2007/06/19 23:47:02 tbox Exp $
 
 $TTL 300	; 5 minutes
 @			IN SOA	mname1. . (
@@ -23,27 +23,9 @@ $TTL 300	; 5 minutes
 				3600       ; minimum (1 hour)
 				)
 			NS	ns
-			MX	10 mx
 ns			A	10.53.0.3
-mx 		 	A 	10.0.0.30
 
 a			A	10.0.0.1
 b			A	10.0.0.2
 d			A	10.0.0.4
 z			A	10.0.0.26
-a.a.a.a.a.a.a.a.a.a.e	A	10.0.0.27
-x			CNAME	a
-
-private			NS	ns.private
-ns.private		A	10.53.0.2
-
-insecure		NS	ns.insecure
-ns.insecure		A	10.53.0.2
-
-nosoa 			NS	ns.nosoa
-ns.nosoa		A	10.53.0.7
-
-normalthenrrsig		A	10.0.0.28
-rrsigonly		A	10.0.0.29
-
-

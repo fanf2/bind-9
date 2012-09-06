@@ -381,7 +381,8 @@ kskname=`$KEYGEN -q -r $RANDFILE $zone`
 zskname=`$KEYGEN -q -r $RANDFILE -f KSK $zone`
 cp $infile $zonefile
 $SIGNER -S -r $RANDFILE -e now+1mi -o $zone $zonefile > /dev/null 2>&1
-rm -f ${zskname}.private ${kskname}.private
+mv -f ${zskname}.private ${zskname}.private.moved
+mv -f ${kskname}.private ${kskname}.private.moved
 
 #
 # A zone where the signer's name has been forced to uppercase.
@@ -428,3 +429,9 @@ $CHECKZONE -D nosign.example nosign.example.db.signed 2>&- | \
         awk '$4 == "RRSIG" && $5 == "NS" {$2 = ""; print}' | \
         sed 's/[ 	][ 	]*/ /g'> ../nosign.before
 
+#
+# An inline signing zone
+#
+zone=inline.example.
+kskname=`$KEYGEN -q -3 -r $RANDFILE -fk $zone`
+zskname=`$KEYGEN -q -3 -r $RANDFILE $zone`
