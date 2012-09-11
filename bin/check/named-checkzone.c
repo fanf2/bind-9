@@ -78,7 +78,7 @@ static void
 usage(void) {
 	fprintf(stderr,
 		"usage: %s [-djqvD] [-c class] "
-		"[-f inputformat] [-F outputformat] "
+		"[-f inputformat] [-F outputformat] [-J journal] "
 		"[-t directory] [-w directory] [-k (ignore|warn|fail)] "
 		"[-n (ignore|warn|fail)] [-m (ignore|warn|fail)] "
 		"[-r (ignore|warn|fail)] "
@@ -162,7 +162,7 @@ main(int argc, char **argv) {
 	isc_commandline_errprint = ISC_FALSE;
 
 	while ((c = isc_commandline_parse(argc, argv,
-			       "c:df:hi:jk:L:m:n:qr:s:t:o:vw:DF:M:S:W:"))
+			       "c:df:hi:jJ:k:L:m:n:qr:s:t:o:vw:DF:M:S:W:"))
 	       != EOF) {
 		switch (c) {
 		case 'c':
@@ -220,6 +220,11 @@ main(int argc, char **argv) {
 			break;
 
 		case 'j':
+			nomerge = ISC_FALSE;
+			break;
+
+		case 'J':
+			journal = isc_commandline_argument;
 			nomerge = ISC_FALSE;
 			break;
 
