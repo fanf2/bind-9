@@ -7247,15 +7247,18 @@ log_query(ns_client_t *client, unsigned int flags, unsigned int extflags) {
 	isc_netaddr_format(&client->destaddr, onbuf, sizeof(onbuf));
 
 	ns_client_log(client, NS_LOGCATEGORY_QUERIES, NS_LOGMODULE_QUERY,
-		      level, "query: %s %s %s %s%s%s%s%s%s (%s)", namebuf,
-		      classname, typename, WANTRECURSION(client) ? "+" : "-",
+		      level, "query: %s %s %s %s%s%s%s%s%s (%s) [%04x:%04x]",
+		      namebuf, classname, typename,
+		      WANTRECURSION(client) ? "+" : "-",
 		      (client->signer != NULL) ? "S": "",
 		      (client->opt != NULL) ? "E" : "",
 		      ((client->attributes & NS_CLIENTATTR_TCP) != 0) ?
 				 "T" : "",
 		      ((extflags & DNS_MESSAGEEXTFLAG_DO) != 0) ? "D" : "",
 		      ((flags & DNS_MESSAGEFLAG_CD) != 0) ? "C" : "",
-		      onbuf);
+		      onbuf,
+		      isc_sockaddr_getport(&client->peeraddr),
+		      client->message->id);
 }
 
 static inline void
