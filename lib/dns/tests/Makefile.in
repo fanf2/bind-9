@@ -39,13 +39,21 @@ LIBS =		@LIBS@ @ATFLIBS@
 OBJS =		dnstest.@O@
 SRCS =		dnstest.c master_test.c dbiterator_test.c time_test.c \
 		private_test.c update_test.c zonemgr_test.c zt_test.c \
+<<<<<<< HEAD
 		dbdiff_test.c nsec3_test.c rdataset_test.c
+=======
+		dbdiff_test.c nsec3_test.c rdata_test.c
+>>>>>>> bind-9.9.1-P3
 
 SUBDIRS =
 TARGETS =	master_test@EXEEXT@ dbiterator_test@EXEEXT@ time_test@EXEEXT@ \
 		private_test@EXEEXT@ update_test@EXEEXT@ zonemgr_test@EXEEXT@ \
 		zt_test@EXEEXT@ dbversion_test@EXEEXT@ dbdiff_test@EXEEXT@ \
+<<<<<<< HEAD
 		nsec3_test@EXEEXT@ rdataset_test@EXEEXT@
+=======
+		nsec3_test@EXEEXT@ rdata_test@EXEEXT@ 
+>>>>>>> bind-9.9.1-P3
 
 @BIND9_MAKE_RULES@
 
@@ -109,6 +117,10 @@ rdataset_test@EXEEXT@: rdataset_test.@O@ dnstest.@O@ ${ISCDEPLIBS} ${DNSDEPLIBS}
 	${LIBTOOL_MODE_LINK} ${PURIFY} ${CC} ${CFLAGS} ${LDFLAGS} -o $@ \
 			rdataset_test.@O@ dnstest.@O@ ${DNSLIBS} \
 				${ISCLIBS} ${LIBS}
+
+rdata_test@EXEEXT@: rdata_test.@O@ ${ISCDEPLIBS} ${DNSDEPLIBS}
+	${LIBTOOL_MODE_LINK} ${PURIFY} ${CC} ${CFLAGS} ${LDFLAGS} -o $@ \
+			rdata_test.@O@ ${DNSLIBS} ${ISCLIBS} ${LIBS}
 
 unit::
 	sh ${top_srcdir}/unit/unittest.sh
