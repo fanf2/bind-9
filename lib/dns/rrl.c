@@ -328,6 +328,7 @@ make_key(dns_rrl_t *rrl, dns_rrl_key_t *key, const isc_sockaddr_t *client_addr,
 	memset(key, 0, sizeof(*key));
 	hval = 0;
 
+	key->kflags = kflags;
 	if ((kflags & (DNS_RRL_KFLAG_NXDOMAIN | DNS_RRL_KFLAG_ERROR |
 		       DNS_RRL_KFLAG_USED_TCP)) == 0) {
 		key->qtype = qtype;
