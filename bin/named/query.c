@@ -5755,11 +5755,9 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 		dns_rdataset_t nc_rdataset;
 		dns_rcode_t rcode;
 		isc_boolean_t wouldlog;
-		char ws_buf[DNS_RRL_LOG_WS_BUF_LEN];
-		char client_buf[DNS_RRL_LOG_CLIENT_BUF_LEN];
-		char fname_buf[DNS_NAME_FORMATSIZE];
-		const char *act_str, *err_str;
-		dns_rrl_result_t nc_result, rrl_result;
+		char log_buf[DNS_RRL_LOG_BUF_LEN];
+		isc_result_t nc_result;
+		dns_rrl_result_t rrl_result;
 
 		client->query.attributes |= NS_QUERYATTR_RRL_CHECKED;
 
@@ -5772,7 +5770,6 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 			if (db != NULL)
 				tname = dns_db_origin(db);
 			rcode = dns_rcode_nxdomain;
-			err_str = "NXDOMAIN ";
 		} else if (result == DNS_R_NCACHENXDOMAIN &&
 			   rdataset != NULL &&
 			   dns_rdataset_isassociated(rdataset) &&
@@ -5797,19 +5794,15 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 				dns_rdataset_disassociate(&nc_rdataset);
 			}
 			rcode = dns_rcode_nxdomain;
-			err_str = "NXDOMAIN ";
 		} else {
 			rcode = dns_rcode_noerror;
-			err_str = "";
 		}
 		rrl_result = dns_rrl(client->view, &client->peeraddr,
-				     client->message->rdclass, qtype, tname,
-				     rcode, client->now, wouldlog,
 				     ISC_TF((client->attributes
 					     & NS_CLIENTATTR_TCP) != 0),
-				     ws_buf, sizeof(ws_buf),
-				     client_buf, sizeof(client_buf),
-				     fname_buf, sizeof(fname_buf));
+				     client->message->rdclass, qtype, tname,
+				     rcode, client->now,
+				     wouldlog, log_buf, sizeof(log_buf));
 		if (rrl_result != DNS_RRL_RESULT_OK) {
 			/*
 			 * Log dropped or slipped responses in the query
@@ -5821,18 +5814,11 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 			 * in QryDropped while slipped responses are counted
 			 * with other truncated responses in RespTruncated.
 			 */
-			if (wouldlog) {
-				if (rrl_result == DNS_RRL_RESULT_DROP)
-					act_str = "drop";
-				else
-					act_str = "slip";
+			if (wouldlog && ns_g_server->log_queries) {
 				ns_client_log(client, NS_LOGCATEGORY_QUERIES,
 					      NS_LOGMODULE_CLIENT,
 					      DNS_RRL_LOG_DROP,
-					      "%srate limit %s %sresponse to"
-					      " %s%s",
-					      ws_buf, act_str, err_str,
-					      client_buf, fname_buf);
+					      "%s", log_buf);
 			}
 			if (!client->view->rrl->log_only) {
 				if (rrl_result == DNS_RRL_RESULT_DROP) {

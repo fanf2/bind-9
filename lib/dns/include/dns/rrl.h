@@ -32,35 +32,64 @@
 ISC_LANG_BEGINDECLS
 
 
+/*
+ * Memory allocation or other failures.
+ */
 #define DNS_RRL_LOG_FAIL	ISC_LOG_WARNING
+/*
+ * dropped or slipped responses.
+ */
 #define DNS_RRL_LOG_DROP	ISC_LOG_INFO
+/*
+ * Major events in dropping or slipping.
+ */
 #define DNS_RRL_LOG_DEBUG1	ISC_LOG_DEBUG(3)
+/*
+ * Limit computations.
+ */
 #define DNS_RRL_LOG_DEBUG2	ISC_LOG_DEBUG(4)
+/*
+ * Less interesting.
+ */
 #define DNS_RRL_LOG_DEBUG3	ISC_LOG_DEBUG(9)
 
-#define DNS_RRL_LOG_WS_BUF_LEN	    sizeof("would still")
-#define DNS_RRL_LOG_CLIENT_BUF_LEN  (ISC_NETADDR_FORMATSIZE + \
-				     sizeof(" for IN ") + sizeof(" "))
+
+#define DNS_RRL_LOG_ERR_LEN	64
+#define DNS_RRL_LOG_BUF_LEN	(sizeof("would continue limiting") +	\
+				 DNS_RRL_LOG_ERR_LEN +			\
+				 sizeof(" responses to ") +		\
+				 ISC_NETADDR_FORMATSIZE +		\
+				 sizeof("/128 for IN ") +		\
+				 DNS_RDATATYPE_FORMATSIZE +		\
+				 DNS_NAME_FORMATSIZE)
 
 
 typedef struct dns_rrl_hash dns_rrl_hash_t;
 
 /*
+ * Response types.
+ */
+typedef enum {
+	DNS_RRL_RTYPE_FREE,
+	DNS_RRL_RTYPE_QUERY,
+	DNS_RRL_RTYPE_NXDOMAIN,
+	DNS_RRL_RTYPE_ERROR,
+	DNS_RRL_RTYPE_ALL,
+	DNS_RRL_RTYPE_TCP,
+} dns_rrl_rtype_t;
+
+/*
  * A rate limit bucket key.
  * This should be small to limit the total size of the database.
  */
-typedef isc_uint8_t dns_rrl_kflags_t;
 typedef struct dns_rrl_key dns_rrl_key_t;
 struct dns_rrl_key {
-	isc_uint32_t	    ip[4];	/* IP address */
-	unsigned int	    name;	/* hash of DNS name */
-	dns_rdatatype_t	    qtype;	/* query type */
-	dns_rrl_kflags_t    kflags;
-# define DNS_RRL_KFLAG_USED_TCP   0x01
-# define DNS_RRL_KFLAG_NXDOMAIN	    0x02
-# define DNS_RRL_KFLAG_ERROR	    0x04
-# define DNS_RRL_KFLAG_NOT_IN	    0x08
-# define DNS_RRL_KFLAG_IPV6	    0x08
+	isc_uint32_t	    ip[4];
+	isc_uint32_t	    qname_hash;
+	dns_rdatatype_t	    qtype;
+	dns_rrl_rtype_t	    rtype   :3;
+	isc_boolean_t	    qclass  :3;
+	isc_boolean_t	    ipv6    :1;
 };
 
 /*
@@ -80,9 +109,14 @@ struct dns_rrl_entry {
 # define DNS_RRL_MAX_WINDOW	600
 # define DNS_RRL_MAX_RATE	(ISC_INT32_MAX / DNS_RRL_MAX_WINDOW)
 	dns_rrl_key_t	key;
-	isc_uint8_t	slip_cnt;
-	isc_uint8_t	log_secs;
-# define DNS_RRL_MAX_LOG_SECS	60
+	unsigned int	slip_cnt    :4;
+# define DNS_RRL_MAX_SLIP	10
+	unsigned int	log_secs    :10;
+# define DNS_RRL_MAX_LOG_SECS	600
+# define DNS_RRL_STOP_LOG_SECS	60
+	isc_boolean_t	logged	    :1;
+	unsigned int	log_qname   :8;
+# define DNS_RRL_NUM_QNAMES	256
 };
 
 /*
@@ -105,6 +139,17 @@ struct dns_rrl_block {
 };
 
 /*
+ * A rate limited qname buffers.
+ */
+typedef struct dns_rrl_qname_buf dns_rrl_qname_buf_t;
+struct dns_rrl_qname_buf {
+	ISC_LINK(dns_rrl_qname_buf_t) link;
+	const dns_rrl_entry_t *e;
+	unsigned int	    index;
+	dns_fixedname_t	    qname;
+};
+
+/*
  * Per-view query rate limit parameters and a pointer to database.
  */
 typedef struct dns_rrl dns_rrl_t;
@@ -116,6 +161,7 @@ struct dns_rrl {
 	int		responses_per_second;
 	int		errors_per_second;
 	int		nxdomains_per_second;
+	int		all_per_second;
 	int		window;
 	int		slip;
 	double		qps_scale;
@@ -131,7 +177,10 @@ struct dns_rrl {
 	int		scaled_responses_per_second;
 	int		scaled_errors_per_second;
 	int		scaled_nxdomains_per_second;
+	int		scaled_all_per_second;
 	int		scaled_slip;
+
+	isc_stdtime_t	prune_time;
 
 	unsigned int	probes;
 	unsigned int	searches;
@@ -146,6 +195,11 @@ struct dns_rrl {
 	isc_uint32_t	ipv4_mask;
 	int		ipv6_prefixlen;
 	isc_uint32_t	ipv6_mask[4];
+
+	dns_rrl_entry_t	*log_ended;
+	ISC_LIST(dns_rrl_qname_buf_t) qname_free;
+	int		num_qnames;
+	dns_rrl_qname_buf_t *qnames[DNS_RRL_NUM_QNAMES];
 };
 
 typedef enum {
@@ -155,13 +209,11 @@ typedef enum {
 } dns_rrl_result_t;
 
 dns_rrl_result_t
-dns_rrl(dns_view_t *view, const isc_sockaddr_t *client_addr,
+dns_rrl(dns_view_t *view,
+	const isc_sockaddr_t *client_addr, isc_boolean_t is_tcp,
 	dns_rdataclass_t rdclass, dns_rdatatype_t qtype,
-	dns_name_t *fname, dns_rcode_t rcode, isc_stdtime_t now,
-	isc_boolean_t wouldlog, isc_boolean_t is_tcp,
-	char *log_ws_buf, int log_ws_buf_len,
-	char *log_client_buf, int log_client_buf_len,
-	char *fname_buf, int fname_buf_len);
+	dns_name_t *qname, dns_rcode_t rcode, isc_stdtime_t now,
+	isc_boolean_t wouldlog, char *log_buf, unsigned int log_buf_len);
 
 void
 dns_rrl_view_destroy(dns_view_t *view);

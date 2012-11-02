@@ -1561,7 +1561,7 @@ configure_rpz(dns_view_t *view, const cfg_listelt_t *element,
 	return (result);
 }
 
-#define CHECK_RRL(obj, cond, pat, val) \
+#define CHECK_RRL(obj, cond, pat, val)					\
 	do {								\
 		if (!(cond)) {						\
 			cfg_obj_log(obj, ns_g_lctx, ISC_LOG_ERROR,	\
@@ -1615,9 +1615,12 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *config, const cfg_obj_t *map) {
 	}
 	rrl->responses_per_second = i;
 	rrl->scaled_responses_per_second = rrl->responses_per_second;
+
 	/*
-	 * The default error rate is the response rate.
+	 * The default error rate is the response rate,
+	 * and so off by default.
 	 */
+	i = rrl->responses_per_second;
 	obj = NULL;
 	result = cfg_map_get(map, "errors-per-second", &obj);
 	if (result == ISC_R_SUCCESS) {
@@ -1627,9 +1630,9 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *config, const cfg_obj_t *map) {
 	}
 	rrl->errors_per_second = i;
 	rrl->scaled_errors_per_second = rrl->errors_per_second;
-
 	/*
-	 * The default NXDOMAIN rate is the response rate.
+	 * The default NXDOMAIN rate is the response rate,
+	 * and so off by default.
 	 */
 	i = rrl->responses_per_second;
 	obj = NULL;
@@ -1642,6 +1645,36 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *config, const cfg_obj_t *map) {
 	rrl->nxdomains_per_second = i;
 	rrl->scaled_nxdomains_per_second = rrl->nxdomains_per_second;
 
+	/*
+	 * The all-per-second rate is off by default.
+	 */
+	i = 0;
+	obj = NULL;
+	result = cfg_map_get(map, "all-per-second", &obj);
+	if (result == ISC_R_SUCCESS) {
+		i = cfg_obj_asuint32(obj);
+		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE,
+			  "invalid '{all-per-second %d;}'", i);
+		CHECK_RRL(obj, i == 0 || (i >= rrl->responses_per_second*4 &&
+					  i >= rrl->errors_per_second*4 &&
+					  i >= rrl->nxdomains_per_second*4),
+			  "'{all-per-second %d;}' must be"
+			  " at least 4 times responses-per-second,"
+			  "errors_per_second, and nxdomains_per_second",
+			  i);
+	}
+	rrl->all_per_second = i;
+	rrl->scaled_all_per_second = rrl->all_per_second;
+
+	i = 2;
+	obj = NULL;
+	result = cfg_map_get(map, "slip", &obj);
+	if (result == ISC_R_SUCCESS) {
+		i = cfg_obj_asuint32(obj);
+		CHECK_RRL(obj, i <= DNS_RRL_MAX_SLIP, "invalid '{slip %d;}'", i);
+	}
+	rrl->slip = i;
+	rrl->scaled_slip = rrl->slip;
 
 	i = 15;
 	obj = NULL;
@@ -1698,16 +1731,6 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *config, const cfg_obj_t *map) {
 			i -= 32;
 		}
 	}
-
-	i = 2;
-	obj = NULL;
-	result = cfg_map_get(map, "slip", &obj);
-	if (result == ISC_R_SUCCESS) {
-		i = cfg_obj_asuint32(obj);
-		CHECK_RRL(obj, i <= 10, "invalid '{slip %d;}'", i);
-	}
-	rrl->slip = i;
-	rrl->scaled_slip = rrl->slip;
 
 	obj = NULL;
 	result = cfg_map_get(map, "exempt-clients", &obj);
@@ -3097,17 +3120,12 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 		}
 	}
 
-	/*
-	 * Build rate-limit data only for views used for real lookups.
-	 */
-	if (view->rdclass == dns_rdataclass_in && need_hints) {
-		obj = NULL;
-		result = ns_config_get(maps, "rate-limit", &obj);
-		if (result == ISC_R_SUCCESS) {
-			result = configure_rrl(view, config, obj);
-			if (result != ISC_R_SUCCESS)
-				goto cleanup;
-		}
+	obj = NULL;
+	result = ns_config_get(maps, "rate-limit", &obj);
+	if (result == ISC_R_SUCCESS) {
+		result = configure_rrl(view, config, obj);
+		if (result != ISC_R_SUCCESS)
+			goto cleanup;
 	}
 
 	result = ISC_R_SUCCESS;

@@ -38,3 +38,6 @@ a5		A	192.168.2.5
 a6		A	192.168.2.6
 
 ; a7 for SERVFAIL
+
+; a8 for all-per-second limit
+$GENERATE 101-180 all$.a8 A 192.168.2.8

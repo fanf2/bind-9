@@ -18,5 +18,5 @@
 # Clean up after rrl tests.
 
 rm -f dig.out*
-rm -f  */named.memstats */named.run */log */named.rpz */session.key
+rm -f  */named.memstats */named.run ns*/log* */named.rpz */session.key
 rm -f ns3/bl*.db */*.jnl */*.core */*.pid

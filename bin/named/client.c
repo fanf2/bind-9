@@ -1143,19 +1143,18 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 	 */
 	if (client->view != NULL && client->view->rrl != NULL) {
 		isc_boolean_t wouldlog;
-		char log_ws_buf[DNS_RRL_LOG_WS_BUF_LEN];
-		char log_client_buf[DNS_RRL_LOG_CLIENT_BUF_LEN];
-		char fname_buf[1];
+		char log_buf[DNS_RRL_LOG_BUF_LEN];
 		dns_rrl_result_t rrl_result;
 
-		wouldlog = isc_log_wouldlog(ns_g_lctx, DNS_RRL_LOG_DROP);
+		INSIST(rcode != dns_rcode_noerror &&
+		       rcode != dns_rcode_nxdomain);
+		wouldlog = (ns_g_server->log_queries &&
+			    isc_log_wouldlog(ns_g_lctx, DNS_RRL_LOG_DROP));
 		rrl_result = dns_rrl(client->view, &client->peeraddr,
-				     dns_rdataclass_in, dns_rdatatype_none,
-				     NULL, rcode, client->now, wouldlog,
 				     TCP_CLIENT(client),
-				     log_ws_buf, sizeof(log_ws_buf),
-				     log_client_buf, sizeof(log_client_buf),
-				     fname_buf, sizeof(fname_buf));
+				     dns_rdataclass_in, dns_rdatatype_none,
+				     NULL, rcode, client->now,
+				     wouldlog, log_buf, sizeof(log_buf));
 		if (rrl_result != DNS_RRL_RESULT_OK) {
 			/*
 			 * Log dropped errors in the query category
@@ -1164,21 +1163,10 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 			 * NS_LOGCATEGORY_RRL.
 			 */
 			if (wouldlog) {
-				char ebuf[64];
-				isc_buffer_t eb;
-
-				isc_buffer_init(&eb, ebuf, sizeof(ebuf));
-				if (dns_rcode_totext(rcode, &eb)!=ISC_R_SUCCESS)
-					isc_buffer_putstr(&eb, "UNKNOWN RCODE");
 				ns_client_log(client, NS_LOGCATEGORY_QUERIES,
 					      NS_LOGMODULE_CLIENT,
 					      DNS_RRL_LOG_DROP,
-					      "%srate limit drop %.*s"
-					      " response to %s",
-					      log_ws_buf,
-					      (int)isc_buffer_usedlength(&eb),
-					      ebuf,
-					      log_client_buf);
+					      "%s", log_buf);
 			}
 			/*
 			 * Some error responses cannot be 'slipped',

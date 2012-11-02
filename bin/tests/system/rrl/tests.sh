@@ -48,6 +48,7 @@ setret () {
     echo "$*"
 }
 
+
 # Wait until soon after the start of a second to make results consistent.
 #   The start of a second credits a rate limit.
 #   This would be far easier in C or by assuming a modern version of perl.
@@ -62,6 +63,7 @@ sec_start () {
     done
 }
 
+
 #   $1=result name  $2=domain name  $3=dig options
 digcmd () {
     OFILE=$1; shift
@@ -70,7 +72,7 @@ digcmd () {
     #echo I:dig $ARGS 1>&2
     START=`date +%y%m%d%H%M.%S`
     RESULT=`$DIG $ARGS 2>&1 | tee $OFILE=TEMP				\
-	    | sed -n -e  's/^[^;].*	\([^	 ]\{1,\}\)$/\1/p' 	\
+	    | sed -n -e  's/^[^;].*	\([^	 ]\{1,\}\)$/\1/p'	\
 		-e 's/;; flags.* tc .*/TC/p'				\
 		-e 's/;; .* status: NXDOMAIN.*/NXDOMAIN/p'		\
 		-e 's/;; .* status: SERVFAIL.*/SERVFAIL/p'		\
@@ -80,6 +82,7 @@ digcmd () {
     mv "$OFILE=TEMP" "$OFILE=$RESULT"
     touch -t $START "$OFILE=$RESULT"
 }
+
 
 #   $1=number of tests  $2=target domain  $3=dig options
 CNT=1
@@ -139,6 +142,7 @@ ck_result() {
 }
 
 
+#########
 sec_start
 
 # basic rate limiting
@@ -146,15 +150,20 @@ burst 3 a1.tld2
 # 1 second delay allows an additional response.
 sleep 1
 burst 21 a1.tld2
-
+# request 30 different qnames to try a wild card
 burst 30 'x$CNT.a2.tld2'
 
 #					IP      TC      drop  NXDOMAIN SERVFAIL
+# check for 24 results
+# including the 1 second delay
 ck_result   a1.tld2	192.168.2.1	3	7	14	0	0
 
-# Test a local wild card.  The parent name is counted.
+# Check the wild card answers.
+# The parent name of the 30 requests is counted.
 ck_result 'x*.a2.tld2'	192.168.2.2	2	9	19	0	0
 
+
+#########
 sec_start
 
 burst 1 'y$CNT.a3.tld3'; wait; burst 20 'y$CNT.a3.tld3'
@@ -166,9 +175,11 @@ burst 20 'z$CNT.a4.tld2'
 #   are counted as local responses from the cache.
 ck_result 'y*.a3.tld3'	192.168.3.3	3	6	12	0	0
 
-# NXDOMAIN is also limited based on the parent name.
+# NXDOMAIN responses are also limited based on the parent name.
 ck_result 'z*.a4.tld2'	x		0	6	12	2	0
 
+
+#########
 sec_start
 
 burst 20 a5.tld2 +tcp
@@ -184,6 +195,15 @@ ck_result a6.tld2	192.168.2.6	20	0	0	0	0
 # Errors such as SERVFAIL are rate limited.  The numbers are confusing, because
 #   other rate limiting can be triggered before SERVFAIL is reached.
 ck_result a7.tld4	192.168.2.1	0	5	13	0	2
+
+
+#########
+sec_start
+
+# all-per-second
+CNT=101
+burst 80 'all$CNT.a8.tld2'
+ck_result 'a*.a8.tld2'	192.168.2.8	70	3	7	0	0
 
 
 echo "I:exit status: $ret"
