@@ -228,13 +228,9 @@ view \"_bind\" chaos {\n\
 	allow-new-zones no;\n\
 \n\
 	# Prevent use of this zone in DNS amplified reflection DoS attacks\n\
-	# Notice the size of the authors.bind response.\n\
 	rate-limit {\n\
-		responses-per-second 1;\n\
-		window 10;\n\
+		responses-per-second 3;\n\
 		slip 0;\n\
-		IPv4-prefix-length 16;\n\
-		IPv6-prefix-length 32;\n\
 		min-table-size 10;\n\
 	};\n\
 \n\

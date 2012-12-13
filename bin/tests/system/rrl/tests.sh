@@ -20,6 +20,7 @@ SYSTEMTESTTOP=..
 . $SYSTEMTESTTOP/conf.sh
 
 #set -x
+#set -o noclobber
 
 ns1=10.53.0.1			    # root, defining the others
 ns2=10.53.0.2			    # test server
@@ -91,14 +92,14 @@ burst () {
     BURST_DOM_BASE="$1"; shift
     while test "$BURST_LIMIT" -ge 1; do
 	if test $CNT -lt 10; then
-	    CNT="0$CNT"
-	fi
-	if test $CNT -lt 100; then
-	    CNT="0$CNT"
+	    CNT="00$CNT"
+	else
+	    if test $CNT -lt 100; then
+		CNT="0$CNT"
+	    fi
 	fi
 	eval BURST_DOM="$BURST_DOM_BASE"
 	FILE="dig.out-$BURST_DOM-$CNT"
-	rm -f $FILE=*
 	digcmd $FILE $BURST_DOM $* &
 	CNT=`expr $CNT + 1`
 	BURST_LIMIT=`expr "$BURST_LIMIT" - 1`

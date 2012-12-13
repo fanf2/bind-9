@@ -4809,11 +4809,21 @@ category notify { null; };
                   </entry>
 		  <entry colname="2">
 		    <para>
-		      The start, periodic, and final notices of rate limiting
-		      of a stream of responses are logged at
+		      The start, periodic, and final notices of the
+		      rate limiting of a stream of responses are logged at
 		      <command>info</command> severity in this category.
-		      Various internal performance data such as expansions
-		      of the table is logged debug 1 level and higher.
+		      These messages include a hash value of the domain name
+		      of the response and the name itself,
+		      except when there is insufficient memory to record
+		      the name for the final notice
+		      The final notice is normally delayed until about one
+		      minute after rate limit stops.
+		      A lack of memory can hurry the final notice,
+		      in which case it starts with an asterisk (*).
+		      Various internal events are logged at debug 1 level
+		      and higher.
+		    </para>
+		    <para>
 		      Rate limiting of individual requests
 		      is logged in the <command>queries</command> category
 		      and can be controlled with the
@@ -9849,8 +9859,8 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    or more negative than <command>window</command>
 	    times the per-second limit.
 	    A DNS client that sends requests that are not
-	    answered can penalized for up to <command>window</command> seconds
-	    (default 15).
+	    answered can be penalized for up to <command>window</command>
+	    seconds (default 15).
 	  </para>
 
 	  <para>
@@ -9858,7 +9868,7 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    as if they were for the parent domain name.
 	    This prevents flooding by requesting random.wild.example.com.
 	    For similar reasons, NXDOMAIN responses are counted and rate
-	    limited their owner name, the nearest valid domain name to the
+	    limited by the valid domain name nearest to the
 	    query name with an SOA record.
 	  </para>
 
@@ -9874,11 +9884,12 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    other UDP request to be answered with a small response
 	    claiming that the response would have been truncated.
 	    The small size and relative infrequency of the response make
-	    it unattractive for abuse of third parties.
-	    <command>slip</command> must be between 0 and 10.
-	    0 "slips" or sends no rate limiting truncated responses.
-	    Some error responses cannot be replaced with responses
-	    with the <literal>TC</literal> flag, and so are instead
+	    it unattractive for abuse.
+	    <command>Slip</command> must be between 0 and 10.
+	    A value of 0 does not "slip"
+	    or sends no rate limiting truncated responses.
+	    Some error responses includinge REFUSED and SERVFAIL
+	    cannot be replaced with truncated responses and are instead
 	    leaked at the <command>slip</command> rate.
 	  </para>
 
@@ -9918,10 +9929,6 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	  <para>
 	    UDP responses of all kinds can be limited with the
 	    <command>all-per-second</command> phrase.
-	    This rate limiting is similar to the rate limiting offered by
-	    firewalls.  When performed in a DNS server it is inferior to
-	    the other <command>rate-limit</command> forms, because it ignores
-	    the contents of responses to a block of IP addresses.
 	    The rate limiting provided by
 	    <command>responses-per-second</command>,
 	    <command>errors-per-second</command>, and
@@ -9940,20 +9947,30 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    The SMTP server can need additional NS, A, AAAA, MX, TXT, and SPF
 	    records as it considers the STMP <command>Mail From</command>
 	    command.
+	    This limiting is similar to the rate limiting offered by
+	    firewalls but often inferior.
+	    Attacks that justify ignoring the
+	    contents of DNS responses are likely to be attacks on the
+	    DNS server itself.
+	    Attacks on the DNS server should be discarded before the DNS server
+	    spends resources make TCP connections or parsing DNS requesets,
+	    but that rate limiting must be done before the
+	    DNS server sees the requests.
 	  </para>
 
 	  <para>
-	    The maximum size of the table used to track requests and so
+	    The maximum size of the table used to track requests and
 	    rate limit responses is set with <command>max-table-size</command>.
 	    Each entry in the table is between 40 and 80 bytes.
-	    The default of 10,000 is suitable for a server receiving
-	    5000 DNS requests/second.
-	    10,000 entries require about 1 megabyte.
-	    To reduce cold start costs including those in growing the
-	    table, <command>min-table-size</command> (default 1000)
+	    The table needs approximately as many entries as the number
+	    of requests received per second.
+	    The default is 20,000.
+	    To reduce the cold start of growing the table,
+	    <command>min-table-size</command> (default 500)
 	    can set the minimum table size.
-	    Enable logging to monitor expansions of the table and inform
-	    non-default choices for the initial and maximum table size.
+	    Enable <command>rate-limit</command> category logging to monitor
+	    expansions of the table and inform
+	    choices for the initial and maximum table size.
 	  </para>
 
 	  <para>
