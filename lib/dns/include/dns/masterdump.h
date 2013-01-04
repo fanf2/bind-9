@@ -100,6 +100,9 @@ typedef struct dns_master_style dns_master_style_t;
 /*% Report re-signing time. */
 #define	DNS_STYLEFLAG_RESIGN		0x04000000U
 
+/*% Print TTL with friendly units. */
+#define	DNS_STYLEFLAG_TTL_UNITS		0x08000000U
+
 ISC_LANG_BEGINDECLS
 
 /***
