@@ -111,24 +111,6 @@ dns_ttl_totext(isc_uint32_t src, isc_boolean_t verbose, isc_buffer_t *target) {
 		x++;
 	}
 	INSIST (x > 0);
-	/*
-	 * If only a single unit letter is printed, print it
-	 * in upper case. (Why?  Because BIND 8 does that.
-	 * Presumably it has a reason.)
-	 */
-	if (x == 1 && !verbose) {
-		isc_region_t region;
-		/*
-		 * The unit letter is the last character in the
-		 * used region of the buffer.
-		 *
-		 * toupper() does not need its argument to be masked of cast
-		 * here because region.base is type unsigned char *.
-		 */
-		isc_buffer_usedregion(target, &region);
-		region.base[region.length - 1] =
-			toupper(region.base[region.length - 1]);
-	}
 	return (ISC_R_SUCCESS);
 }
 
