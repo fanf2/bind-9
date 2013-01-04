@@ -132,13 +132,21 @@ totext_soa(ARGS_TOTEXT) {
 	RETERR(str_totext(tctx->linebreak, target));
 
 	for (i = 0; i < 5; i++) {
-		char buf[sizeof("0123456789 ; ")];
 		unsigned long num;
+		unsigned int len = target->used;
 		num = uint32_fromregion(&dregion);
 		isc_region_consume(&dregion, 4);
-		sprintf(buf, comment ? "%-10lu ; " : "%lu", num);
-		RETERR(str_totext(buf, target));
+		if (i >= 1 && (tctx->flags & DNS_STYLEFLAG_TTL_UNITS) != 0) {
+			RETERR(dns_ttl_totext(num, ISC_FALSE, target));
+		} else {
+			char buf[12];
+			sprintf(buf, "%lu", num);
+			RETERR(str_totext(buf, target));
+		}
 		if (comment) {
+			len = target->used - len;
+			INSIST(len <= 10); /* "0123456789 ; " */
+			RETERR(str_totext(len+"           ; ", target));
 			RETERR(str_totext(soa_fieldnames[i], target));
 			/* Print times in week/day/hour/minute/second form */
 			if (i >= 1) {
