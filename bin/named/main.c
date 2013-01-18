@@ -539,8 +539,8 @@ parse_command_line(int argc, char *argv[]) {
 			printf("BIND %s\n", ns_g_version);
 			exit(0);
 		case 'V':
-			printf("BIND %s built with %s\n", ns_g_version,
-				ns_g_configargs);
+			printf("BIND %s built at %s with %s\n", ns_g_version,
+			       ns_g_buildtime, ns_g_configargs);
 #ifdef OPENSSL
 			printf("using OpenSSL version: %s\n",
 			       OPENSSL_VERSION_TEXT);
@@ -805,6 +805,8 @@ setup(void) {
 		      ISC_LOG_NOTICE, "starting BIND %s%s", ns_g_version,
 		      saved_command_line);
 
+	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
+		      ISC_LOG_NOTICE, "built at %s", ns_g_buildtime);
 	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
 		      ISC_LOG_NOTICE, "built with %s", ns_g_configargs);
 

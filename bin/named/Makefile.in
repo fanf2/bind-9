@@ -114,6 +114,7 @@ MANOBJS =	${MANPAGES} ${HTMLPAGES}
 main.@O@: main.c
 	${LIBTOOL_MODE_COMPILE} ${CC} ${ALL_CFLAGS} \
 		-DVERSION=\"${VERSION}\" \
+		-DBUILDTIME=\"$$(date +%Y-%m-%d.%H:%M:%S%z)\" \
 		-DCONFIGARGS="\"${CONFIGARGS}\"" \
 		-DNS_LOCALSTATEDIR=\"${localstatedir}\" \
 		-DNS_SYSCONFDIR=\"${sysconfdir}\" -c ${srcdir}/main.c
