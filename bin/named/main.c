@@ -569,7 +569,7 @@ parse_command_line(int argc, char *argv[]) {
 			break;
 		case 'v':
 			printf("%s %s", ns_g_product, ns_g_version);
-			if (*ns_g_description != 0)
+			if (*ns_g_description != '\0')
 				printf(" %s", ns_g_description);
 			printf("\n");
 			exit(0);
@@ -577,8 +577,8 @@ parse_command_line(int argc, char *argv[]) {
 			printf("%s %s", ns_g_product, ns_g_version);
 			if (*ns_g_description != 0)
 				printf(" %s", ns_g_description);
-			printf(" <id:%s> built by %s with %s\n", ns_g_srcid,
-			       ns_g_builder, ns_g_configargs);
+			printf(" <%s> (%s)\nbuilt by %s with %s\n", ns_g_srcid,
+			    ns_g_buildtime, ns_g_builder, ns_g_configargs);
 #ifdef __clang__
 			printf("compiled by CLANG %s\n", __VERSION__);
 #else
@@ -870,10 +870,17 @@ setup(void) {
 		ns_main_earlyfatal("isc_app_start() failed: %s",
 				   isc_result_totext(result));
 
-	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
-		      ISC_LOG_NOTICE, "starting %s %s%s", ns_g_product,
-		      ns_g_version, saved_command_line);
+	if (*ns_g_description == '\0')
+		isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
+		    ISC_LOG_NOTICE, "%s %s <%s> (%s)", ns_g_product,
+		    ns_g_version, ns_g_srcid, ns_g_buildtime);
+	else
+		isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
+		    ISC_LOG_NOTICE, "%s %s %s <%s> (%s)", ns_g_product,
+		    ns_g_version, ns_g_description, ns_g_srcid, ns_g_buildtime);
 
+	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
+		      ISC_LOG_NOTICE, "starting named%s", saved_command_line);
 	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
 		      ISC_LOG_NOTICE, "built with %s", ns_g_configargs);
 
@@ -1114,11 +1121,7 @@ main(int argc, char *argv[]) {
 	 * strings named.core | grep "named version:"
 	 */
 	strlcat(version,
-#if defined(NO_VERSION_DATE) || !defined(__DATE__)
-		"named version: BIND " VERSION " <" SRCID ">",
-#else
-		"named version: BIND " VERSION " <" SRCID "> (" __DATE__ ")",
-#endif
+		"named version: BIND " VERSION " <" SRCID "> (" BUILDTIME ")",
 		sizeof(version));
 	result = isc_file_progname(*argv, program_name, sizeof(program_name));
 	if (result != ISC_R_SUCCESS)

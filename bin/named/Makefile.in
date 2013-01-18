@@ -127,6 +127,7 @@ main.@O@: main.c
 		-DPRODUCT=\"${PRODUCT}\" \
 		-DDESCRIPTION=\"${DESCRIPTION}\" \
 		-DSRCID=\"${SRCID}\" \
+		-DBUILDTIME=\"$$(date +%Y-%m-%d.%H:%M:%S%z)\" \
 		-DCONFIGARGS="\"${CONFIGARGS}\"" \
 		-DBUILDER="\"make\"" \
 		-DNS_LOCALSTATEDIR=\"${localstatedir}\" \
