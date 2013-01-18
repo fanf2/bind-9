@@ -120,6 +120,7 @@ main.@O@: main.c
 		-DVERSION=\"${VERSION}\" \
 		-DPRODUCT=\"${PRODUCT}\" \
 		-DSRCID=\"${SRCID}\" \
+		-DBUILDTIME=\"$$(date +%Y-%m-%d.%H:%M:%S%z)\" \
 		-DCONFIGARGS="\"${CONFIGARGS}\"" \
 		-DNS_LOCALSTATEDIR=\"${localstatedir}\" \
 		-DNS_SYSCONFDIR=\"${sysconfdir}\" -c ${srcdir}/main.c
