@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -35,6 +35,7 @@
 #include <dns/adb.h>
 #include <dns/cache.h>
 #include <dns/db.h>
+#include <dns/dispatch.h>
 #include <dns/dlz.h>
 #ifdef BIND9
 #include <dns/dns64.h>
@@ -485,6 +486,10 @@ view_flushanddetach(dns_view_t **viewp, isc_boolean_t flush) {
 		view->flush = ISC_TRUE;
 	isc_refcount_decrement(&view->references, &refs);
 	if (refs == 0) {
+#ifdef BIND9
+		dns_zone_t *mkzone = NULL, *rdzone = NULL;
+#endif
+
 		LOCK(&view->lock);
 		if (!RESSHUTDOWN(view))
 			dns_resolver_shutdown(view->resolver);
@@ -500,18 +505,29 @@ view_flushanddetach(dns_view_t **viewp, isc_boolean_t flush) {
 		else
 			dns_zt_detach(&view->zonetable);
 		if (view->managed_keys != NULL) {
+			mkzone = view->managed_keys;
+			view->managed_keys = NULL;
 			if (view->flush)
-				dns_zone_flush(view->managed_keys);
-			dns_zone_detach(&view->managed_keys);
+				dns_zone_flush(mkzone);
 		}
 		if (view->redirect != NULL) {
+			rdzone = view->redirect;
+			view->redirect = NULL;
 			if (view->flush)
-				dns_zone_flush(view->redirect);
-			dns_zone_detach(&view->redirect);
+				dns_zone_flush(rdzone);
 		}
 #endif
 		done = all_done(view);
 		UNLOCK(&view->lock);
+
+#ifdef BIND9
+		/* Need to detach zones outside view lock */
+		if (mkzone != NULL)
+			dns_zone_detach(&mkzone);
+
+		if (rdzone != NULL)
+			dns_zone_detach(&rdzone);
+#endif
 	}
 
 	*viewp = NULL;
@@ -655,7 +671,8 @@ req_shutdown(isc_task_t *task, isc_event_t *event) {
 
 isc_result_t
 dns_view_createresolver(dns_view_t *view,
-			isc_taskmgr_t *taskmgr, unsigned int ntasks,
+			isc_taskmgr_t *taskmgr,
+			unsigned int ntasks, unsigned int ndisp,
 			isc_socketmgr_t *socketmgr,
 			isc_timermgr_t *timermgr,
 			unsigned int options,
@@ -676,7 +693,7 @@ dns_view_createresolver(dns_view_t *view,
 		return (result);
 	isc_task_setname(view->task, "view", view);
 
-	result = dns_resolver_create(view, taskmgr, ntasks, socketmgr,
+	result = dns_resolver_create(view, taskmgr, ntasks, ndisp, socketmgr,
 				     timermgr, options, dispatchmgr,
 				     dispatchv4, dispatchv6,
 				     &view->resolver);
@@ -708,8 +725,7 @@ dns_view_createresolver(dns_view_t *view,
 	result = dns_requestmgr_create(view->mctx, timermgr, socketmgr,
 				      dns_resolver_taskmgr(view->resolver),
 				      dns_resolver_dispatchmgr(view->resolver),
-				      dns_resolver_dispatchv4(view->resolver),
-				      dns_resolver_dispatchv6(view->resolver),
+				      dispatchv4, dispatchv6,
 				      &view->requestmgr);
 	if (result != ISC_R_SUCCESS) {
 		dns_adb_shutdown(view->adb);
@@ -900,6 +916,7 @@ dns_view_find2(dns_view_t *view, dns_name_t *name, dns_rdatatype_t type,
 #ifndef BIND9
 	UNUSED(use_hints);
 	UNUSED(use_static_stub);
+	UNUSED(zone);
 #endif
 
 	/*
@@ -924,11 +941,11 @@ dns_view_find2(dns_view_t *view, dns_name_t *name, dns_rdatatype_t type,
 	/*
 	 * Find a database to answer the query.
 	 */
-	zone = NULL;
 	db = NULL;
 	node = NULL;
 	is_staticstub_zone = ISC_FALSE;
 #ifdef BIND9
+	zone = NULL;
 	result = dns_zt_find(view->zonetable, name, 0, NULL, &zone);
 	if (zone != NULL && dns_zone_gettype(zone) == dns_zone_staticstub &&
 	    !use_static_stub) {
@@ -1176,11 +1193,14 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 	dns_rdataset_t zrdataset, zsigrdataset;
 	dns_fixedname_t zfixedname;
 
+#ifndef BIND9
+	UNUSED(zone);
+#endif
+
 	REQUIRE(DNS_VIEW_VALID(view));
 	REQUIRE(view->frozen);
 
 	db = NULL;
-	zone = NULL;
 	use_zone = ISC_FALSE;
 	try_hints = ISC_FALSE;
 	zfname = NULL;
@@ -1196,6 +1216,7 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 	 * Find the right database.
 	 */
 #ifdef BIND9
+	zone = NULL;
 	result = dns_zt_find(view->zonetable, name, 0, NULL, &zone);
 	if (result == ISC_R_SUCCESS || result == DNS_R_PARTIALMATCH)
 		result = dns_zone_getdb(zone, &db);
