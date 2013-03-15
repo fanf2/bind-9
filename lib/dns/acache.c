@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2008  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2008, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -27,6 +27,7 @@
 #include <isc/random.h>
 #include <isc/refcount.h>
 #include <isc/rwlock.h>
+#include <isc/serial.h>
 #include <isc/task.h>
 #include <isc/time.h>
 #include <isc/timer.h>
@@ -72,10 +73,10 @@
  * (XXX simply derived from definitions in cache.c  There may be better
  *  constants here.)
  */
-#define DNS_ACACHE_MINSIZE 		2097152	/* Bytes.  2097152 = 2 MB */
-#define DNS_ACACHE_CLEANERINCREMENT	1000	/* Number of entries. */
+#define DNS_ACACHE_MINSIZE 		2097152U /* Bytes.  2097152 = 2 MB */
+#define DNS_ACACHE_CLEANERINCREMENT	1000	 /* Number of entries. */
 
-#define DEFAULT_ACACHE_ENTRY_LOCK_COUNT	1009	/*%< Should be prime. */
+#define DEFAULT_ACACHE_ENTRY_LOCK_COUNT	1009	 /*%< Should be prime. */
 
 #if defined(ISC_RWLOCK_USEATOMIC) && defined(ISC_PLATFORM_HAVEATOMICSTORE)
 #define ACACHE_USE_RWLOCK 1
@@ -776,9 +777,13 @@ entry_stale(acache_cleaner_t *cleaner, dns_acacheentry_t *entry,
 	 * use and the cleaning interval.
 	 */
 	if (cleaner->overmem) {
-		unsigned int passed =
-			now32 - entry->lastused; /* <= interval */
+		unsigned int passed;
 		isc_uint32_t val;
+
+		if (isc_serial_ge(now32, entry->lastused))
+			passed = now32 - entry->lastused; /* <= interval */
+		else
+			passed = 0;
 
 		if (passed > interval / 2)
 			return (ISC_TRUE);
@@ -825,8 +830,10 @@ acache_incremental_cleaning_action(isc_task_t *task, isc_event_t *event) {
 
 	entry = cleaner->current_entry;
 	isc_stdtime_convert32(cleaner->last_cleanup_time, &last32);
-	INSIST(now32 > last32);
-	interval = now32 - last32;
+	if (isc_serial_ge(now32, last32))
+		interval = now32 - last32;
+	else
+		interval = 0;
 
 	while (n_entries-- > 0) {
 		isc_boolean_t is_stale = ISC_FALSE;
@@ -1762,19 +1769,18 @@ dns_acache_setcleaninginterval(dns_acache_t *acache, unsigned int t) {
  * function for more details about the logic.
  */
 void
-dns_acache_setcachesize(dns_acache_t *acache, isc_uint32_t size) {
-	isc_uint32_t lowater;
-	isc_uint32_t hiwater;
+dns_acache_setcachesize(dns_acache_t *acache, size_t size) {
+	size_t hiwater, lowater;
 
 	REQUIRE(DNS_ACACHE_VALID(acache));
 
-	if (size != 0 && size < DNS_ACACHE_MINSIZE)
+	if (size != 0U && size < DNS_ACACHE_MINSIZE)
 		size = DNS_ACACHE_MINSIZE;
 
 	hiwater = size - (size >> 3);
 	lowater = size - (size >> 2);
 
-	if (size == 0 || hiwater == 0 || lowater == 0)
+	if (size == 0U || hiwater == 0U || lowater == 0U)
 		isc_mem_setwater(acache->mctx, water, acache, 0, 0);
 	else
 		isc_mem_setwater(acache->mctx, water, acache,

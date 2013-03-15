@@ -3,8 +3,10 @@
 # This file must follow /bin/sh rules.  It is imported directly via
 # configure.
 #
+PRODUCT=BIND
 MAJORVER=9
 MINORVER=9
-PATCHVER=2-vjs340.03
-RELEASETYPE=-P
-RELEASEVER=1
+PATCHVER=3-vjs340.03
+PATCHVER=3
+RELEASETYPE=b
+RELEASEVER=2
