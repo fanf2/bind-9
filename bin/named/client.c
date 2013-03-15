@@ -1153,7 +1153,7 @@ ns_client_error(ns_client_t *client, isc_result_t result) {
 		rrl_result = dns_rrl(client->view, &client->peeraddr,
 				     TCP_CLIENT(client),
 				     dns_rdataclass_in, dns_rdatatype_none,
-				     NULL, rcode, client->now,
+				     NULL, result, client->now,
 				     wouldlog, log_buf, sizeof(log_buf));
 		if (rrl_result != DNS_RRL_RESULT_OK) {
 			/*

@@ -164,6 +164,7 @@ enum {
 	dns_nsstatscounter_updatedone = 33,
 	dns_nsstatscounter_updatefail = 34,
 	dns_nsstatscounter_updatebadprereq = 35,
+
 	dns_nsstatscounter_rpz_rewrites = 36,
 
 	dns_nsstatscounter_ratedropped = 37,

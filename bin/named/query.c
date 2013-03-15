@@ -5872,7 +5872,6 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 	    fname != NULL && dns_name_isabsolute(fname) &&
 	    (client->query.attributes & NS_QUERYATTR_RRL_CHECKED) == 0) {
 		dns_rdataset_t nc_rdataset;
-		dns_rcode_t rcode;
 		isc_boolean_t wouldlog;
 		char log_buf[DNS_RRL_LOG_BUF_LEN];
 		isc_result_t nc_result;
@@ -5888,7 +5887,7 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 			 */
 			if (db != NULL)
 				tname = dns_db_origin(db);
-			rcode = dns_rcode_nxdomain;
+			rrl_result = result;
 		} else if (result == DNS_R_NCACHENXDOMAIN &&
 			   rdataset != NULL &&
 			   dns_rdataset_isassociated(rdataset) &&
@@ -5912,15 +5911,17 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 				}
 				dns_rdataset_disassociate(&nc_rdataset);
 			}
-			rcode = dns_rcode_nxdomain;
+			rrl_result = DNS_R_NXDOMAIN;
+		} else if (result == DNS_R_DELEGATION) {
+			rrl_result = result;
 		} else {
-			rcode = dns_rcode_noerror;
+			rrl_result = ISC_R_SUCCESS;
 		}
 		rrl_result = dns_rrl(client->view, &client->peeraddr,
 				     ISC_TF((client->attributes
 					     & NS_CLIENTATTR_TCP) != 0),
 				     client->message->rdclass, qtype, tname,
-				     rcode, client->now,
+				     rrl_result, client->now,
 				     wouldlog, log_buf, sizeof(log_buf));
 		if (rrl_result != DNS_RRL_RESULT_OK) {
 			/*

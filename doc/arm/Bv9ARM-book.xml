@@ -10018,10 +10018,10 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	  <para>
 	    When the approximate query per second rate exceeds
 	    the <command>qps-scale</command> value,
-	    the <command>responses-per-second</command>,
+	    then the <command>responses-per-second</command>,
 	    <command>errors-per-second</command>,
-	    <command>nxdomains-per-second</command>,
-	    and <command>slip</command> values are reduced by the
+	    <command>nxdomains-per-second</command> and
+	    <command>all-per-second</command> values are reduced by the
 	    ratio of the current rate to the <command>qps-scale</command> value.
 	    This feature can tighten defenses during attacks.
 	    For example, with
@@ -10030,9 +10030,8 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    all DNS clients including via TCP,
 	    then the effective responses/second limit changes to
 	    (250/1000)*20 or 5.
-	    The limits for IP addresses using TCP are not reduced.
-	    Responses sent via TCP are not subject to rate limits
-	    but are counted to approximate the query per second rate.
+	    Responses sent via TCP are not limited
+	    but are counted to compute the query per second rate.
 	  </para>
 
 	  <para>
@@ -10051,15 +10050,18 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	  <para>
 	    UDP responses of all kinds can be limited with the
 	    <command>all-per-second</command> phrase.
-	    The rate limiting provided by
+	    This rate limiting is unlike the rate limiting provided by
 	    <command>responses-per-second</command>,
 	    <command>errors-per-second</command>, and
 	    <command>nxdomains-per-second</command> on a DNS server
-	    is often invisible to the victim of a DNS reflection attack.
+	    which are often invisible to the victim of a DNS reflection attack.
 	    Unless the forged requests of the attack are the same as the
 	    legitimate requests of the victim, the victim's requests are
 	    not affected.
-	    A <command>all-per-second</command> limit must be
+	    Responses affected by an <command>all-per-second</command> limit
+	    are always dropped; the <command>slip</command> value has no
+	    effect.
+	    An <command>all-per-second</command> limit should be
 	    at least 4 times as large as the other limits,
 	    because single DNS clients often send bursts of legitimate
 	    requests.
@@ -10069,12 +10071,14 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    The SMTP server can need additional NS, A, AAAA, MX, TXT, and SPF
 	    records as it considers the STMP <command>Mail From</command>
 	    command.
-	    This limiting is similar to the rate limiting offered by
-	    firewalls but often inferior.
+	    Web browsers often repeatedly resolve the same names that
+	    are repeated in HTML &lt;IMG&gt; tags in a page.
+	    <command>All-per-second</command> is similar to the
+	    rate limiting offered by firewalls but often inferior.
 	    Attacks that justify ignoring the
 	    contents of DNS responses are likely to be attacks on the
 	    DNS server itself.
-	    Attacks on the DNS server should be discarded before the DNS server
+	    They usually should be discarded before the DNS server
 	    spends resources make TCP connections or parsing DNS requesets,
 	    but that rate limiting must be done before the
 	    DNS server sees the requests.

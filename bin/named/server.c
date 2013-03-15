@@ -1736,16 +1736,8 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *config, const cfg_obj_t *map) {
 	result = cfg_map_get(map, "all-per-second", &obj);
 	if (result == ISC_R_SUCCESS) {
 		i = cfg_obj_asuint32(obj);
-		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE,
-			  "all-per-second %d > %d",
+		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE, "all-per-second %d > %d",
 			  i, DNS_RRL_MAX_RATE);
-		CHECK_RRL(obj, i == 0 || (i >= rrl->responses_per_second*4 &&
-					  i >= rrl->errors_per_second*4 &&
-					  i >= rrl->nxdomains_per_second*4),
-			  "'all-per-second %d' must be"
-			  " at least %d times responses-per-second,"
-			  "errors_per_second, and nxdomains_per_second",
-			  i, 4);
 	}
 	rrl->all_per_second = i;
 	rrl->scaled_all_per_second = rrl->all_per_second;
@@ -3242,6 +3234,14 @@ configure_view(dns_view_t *view, cfg_obj_t *config, cfg_obj_t *vconfig,
 				      sep, viewname,  empty);
 			dns_zone_detach(&zone);
 		}
+	}
+
+	obj = NULL;
+	result = ns_config_get(maps, "rate-limit", &obj);
+	if (result == ISC_R_SUCCESS) {
+		result = configure_rrl(view, config, obj);
+		if (result != ISC_R_SUCCESS)
+			goto cleanup;
 	}
 
 	result = ISC_R_SUCCESS;
