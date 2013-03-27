@@ -2321,6 +2321,9 @@ setup_lookup(dig_lookup_t *lookup) {
 		extrabytes = 0;
 		printmessage(ISC_LIST_HEAD(lookup->q), lookup->sendmsg,
 			     ISC_TRUE);
+		if (lookup->stats)
+			printf(";; QUERY SIZE: %u\n\n",
+			    isc_buffer_usedlength(&lookup->renderbuf));
 	}
 }
 

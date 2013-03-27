@@ -417,7 +417,7 @@ parse_command_line(int argc, char *argv[]) {
 
 	isc_commandline_errprint = ISC_FALSE;
 	while ((ch = isc_commandline_parse(argc, argv,
-					   "46c:C:d:E:fFgi:lm:n:N:p:P:"
+					   "46c:C:d:E:fFgi:lL:m:n:N:p:P:"
 					   "sS:t:T:U:u:vVx:")) != -1) {
 		switch (ch) {
 		case '4':
@@ -469,6 +469,9 @@ parse_command_line(int argc, char *argv[]) {
 			break;
 		case 'l':
 			ns_g_lwresdonly = ISC_TRUE;
+			break;
+		case 'L':
+			ns_g_logfile = isc_commandline_argument;
 			break;
 		case 'm':
 			set_flags(isc_commandline_argument, mem_debug_flags,
@@ -543,8 +546,9 @@ parse_command_line(int argc, char *argv[]) {
 			printf("%s %s\n", ns_g_product, ns_g_version);
 			exit(0);
 		case 'V':
-			printf("%s %s <id:%s> built with %s\n", ns_g_product,
-			       ns_g_version, ns_g_srcid, ns_g_configargs);
+			printf("%s %s <%s> (%s)\nbuilt with %s\n",
+			    ns_g_product, ns_g_version, ns_g_srcid,
+			    ns_g_buildtime, ns_g_configargs);
 #ifdef OPENSSL
 			printf("using OpenSSL version: %s\n",
 			       OPENSSL_VERSION_TEXT);
@@ -808,9 +812,10 @@ setup(void) {
 				   isc_result_totext(result));
 
 	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
-		      ISC_LOG_NOTICE, "starting %s %s%s", ns_g_product,
-		      ns_g_version, saved_command_line);
-
+		      ISC_LOG_NOTICE, "%s %s <%s> (%s)", ns_g_product,
+		      ns_g_version, ns_g_srcid, ns_g_buildtime);
+	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
+		      ISC_LOG_NOTICE, "starting named%s", saved_command_line);
 	isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL, NS_LOGMODULE_MAIN,
 		      ISC_LOG_NOTICE, "built with %s", ns_g_configargs);
 
@@ -1049,11 +1054,7 @@ main(int argc, char *argv[]) {
 	 * strings named.core | grep "named version:"
 	 */
 	strlcat(version,
-#if defined(NO_VERSION_DATE) || !defined(__DATE__)
-		"named version: BIND " VERSION " <" SRCID ">",
-#else
-		"named version: BIND " VERSION " <" SRCID "> (" __DATE__ ")",
-#endif
+		"named version: BIND " VERSION " <" SRCID "> (" BUILDTIME ")",
 		sizeof(version));
 	result = isc_file_progname(*argv, program_name, sizeof(program_name));
 	if (result != ISC_R_SUCCESS)
