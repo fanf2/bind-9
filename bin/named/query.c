@@ -7655,5 +7655,13 @@ ns_query_start(ns_client_t *client) {
 
 	qclient = NULL;
 	ns_client_attach(client, &qclient);
+
+	/* direct all TYPE=255/ANY queries to TCP */
+	if (qtype == dns_rdatatype_any &&
+		(client->attributes & NS_CLIENTATTR_TCP) == 0)
+	{
+		client->message->flags |= DNS_MESSAGEFLAG_TC;
+	}
+
 	(void)query_find(qclient, NULL, qtype);
 }
