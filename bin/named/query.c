@@ -5872,12 +5872,15 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 	 * Delay handling delegations for which we are certain to recurse and
 	 *	return here (DNS_R_DELEGATION, not a child of one of our
 	 *	own zones, and recursion enabled)
+	 * Don't mess with responses rewritten by RPZ
 	 * Count each response at most once.
 	 */
 	if (client->view->rrl != NULL &&
 	    ((fname != NULL && dns_name_isabsolute(fname)) ||
 	     (result == ISC_R_NOTFOUND && !RECURSIONOK(client))) &&
 	    !(result == DNS_R_DELEGATION && !is_zone && RECURSIONOK(client)) &&
+	    (client->query.rpz_st == NULL ||
+	     (client->query.rpz_st->state & DNS_RPZ_REWRITTEN) == 0)&&
 	    (client->query.attributes & NS_QUERYATTR_RRL_CHECKED) == 0) {
 		dns_rdataset_t nc_rdataset;
 		isc_boolean_t wouldlog;
