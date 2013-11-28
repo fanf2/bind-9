@@ -7132,9 +7132,11 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 				    sizeof(addrbuf));
 		snprintf(buf, sizeof(buf), "received packet from %s "
 			 "(bad edns):\n", addrbuf);
+/*
 		dns_message_logpacket(message, buf,
 			      DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER,
 			      ISC_LOG_NOTICE, fctx->res->mctx);
+*/
 		dns_adb_changeflags(fctx->adb, query->addrinfo,
 				    DNS_FETCHOPT_NOEDNS0,
 				    DNS_FETCHOPT_NOEDNS0);
@@ -7162,9 +7164,11 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 				    sizeof(addrbuf));
 		snprintf(buf, sizeof(buf), "received packet from %s (no opt):\n",
 			 addrbuf);
+/*
 		dns_message_logpacket(message, buf,
 			      DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER,
 			      ISC_LOG_NOTICE, fctx->res->mctx);
+*/
 		dns_adb_changeflags(fctx->adb, query->addrinfo,
 				    DNS_FETCHOPT_NOEDNS0,
 				    DNS_FETCHOPT_NOEDNS0);
