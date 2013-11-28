@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2005, 2007-2011, 2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -307,7 +307,7 @@ struct dns_journal {
 	unsigned int		magic;		/*%< JOUR */
 	isc_mem_t		*mctx;		/*%< Memory context */
 	journal_state_t		state;
-	const char 		*filename;	/*%< Journal file name */
+	char 			*filename;	/*%< Journal file name */
 	FILE *			fp;		/*%< File handle */
 	isc_offset_t		offset;		/*%< Current file offset */
 	journal_header_t 	header;		/*%< In-core journal header */
@@ -387,7 +387,8 @@ journal_header_encode(journal_header_t *cooked, journal_rawheader_t *raw) {
 static isc_result_t
 journal_seek(dns_journal_t *j, isc_uint32_t offset) {
 	isc_result_t result;
-	result = isc_stdio_seek(j->fp, (long)offset, SEEK_SET);
+
+	result = isc_stdio_seek(j->fp, (off_t)offset, SEEK_SET);
 	if (result != ISC_R_SUCCESS) {
 		isc_log_write(JOURNAL_COMMON_LOGARGS, ISC_LOG_ERROR,
 			      "%s: seek: %s", j->filename,
@@ -568,12 +569,16 @@ journal_open(isc_mem_t *mctx, const char *filename, isc_boolean_t write,
 	if (j == NULL)
 		return (ISC_R_NOMEMORY);
 
-	j->mctx = mctx;
+	j->mctx = NULL;
+	isc_mem_attach(mctx, &j->mctx);
 	j->state = JOURNAL_STATE_INVALID;
 	j->fp = NULL;
-	j->filename = filename;
+	j->filename = isc_mem_strdup(mctx, filename);
 	j->index = NULL;
 	j->rawindex = NULL;
+
+	if (j->filename == NULL)
+		FAIL(ISC_R_NOMEMORY);
 
 	result = isc_stdio_open(j->filename, write ? "rb+" : "rb", &fp);
 
@@ -677,9 +682,11 @@ journal_open(isc_mem_t *mctx, const char *filename, isc_boolean_t write,
 			    sizeof(journal_rawpos_t));
 		j->index = NULL;
 	}
+	if (j->filename != NULL)
+		isc_mem_free(j->mctx, j->filename);
 	if (j->fp != NULL)
 		(void)isc_stdio_close(j->fp);
-	isc_mem_put(j->mctx, j, sizeof(*j));
+	isc_mem_putanddetach(&j->mctx, j, sizeof(*j));
 	return (result);
 }
 
@@ -1240,11 +1247,12 @@ dns_journal_destroy(dns_journal_t **journalp) {
 		isc_mem_put(j->mctx, j->it.target.base, j->it.target.length);
 	if (j->it.source.base != NULL)
 		isc_mem_put(j->mctx, j->it.source.base, j->it.source.length);
-
+	if (j->filename != NULL)
+		isc_mem_free(j->mctx, j->filename);
 	if (j->fp != NULL)
 		(void)isc_stdio_close(j->fp);
 	j->magic = 0;
-	isc_mem_put(j->mctx, j, sizeof(*j));
+	isc_mem_putanddetach(&j->mctx, j, sizeof(*j));
 	*journalp = NULL;
 }
 
@@ -1256,9 +1264,7 @@ dns_journal_destroy(dns_journal_t **journalp) {
 /* XXX Share code with incoming IXFR? */
 
 static isc_result_t
-roll_forward(dns_journal_t *j, dns_db_t *db, unsigned int options,
-	     isc_uint32_t resign)
-{
+roll_forward(dns_journal_t *j, dns_db_t *db, unsigned int options) {
 	isc_buffer_t source;		/* Transaction data from disk */
 	isc_buffer_t target;		/* Ditto after _fromwire check */
 	isc_uint32_t db_serial;		/* Database SOA serial */
@@ -1275,7 +1281,6 @@ roll_forward(dns_journal_t *j, dns_db_t *db, unsigned int options,
 	REQUIRE(DNS_DB_VALID(db));
 
 	dns_diff_init(j->mctx, &diff);
-	diff.resign = resign;
 
 	/*
 	 * Set up empty initial buffers for unchecked and checked
@@ -1391,16 +1396,8 @@ roll_forward(dns_journal_t *j, dns_db_t *db, unsigned int options,
 }
 
 isc_result_t
-dns_journal_rollforward(isc_mem_t *mctx, dns_db_t *db,
-			unsigned int options, const char *filename)
-{
-	REQUIRE((options & DNS_JOURNALOPT_RESIGN) == 0);
-	return (dns_journal_rollforward2(mctx, db, options, 0, filename));
-}
-
-isc_result_t
-dns_journal_rollforward2(isc_mem_t *mctx, dns_db_t *db, unsigned int options,
-			 isc_uint32_t resign, const char *filename)
+dns_journal_rollforward(isc_mem_t *mctx, dns_db_t *db, unsigned int options,
+			const char *filename)
 {
 	dns_journal_t *j;
 	isc_result_t result;
@@ -1420,7 +1417,7 @@ dns_journal_rollforward2(isc_mem_t *mctx, dns_db_t *db, unsigned int options,
 	if (JOURNAL_EMPTY(&j->header))
 		result = DNS_R_UPTODATE;
 	else
-		result = roll_forward(j, db, options, resign);
+		result = roll_forward(j, db, options);
 
 	dns_journal_destroy(&j);
 

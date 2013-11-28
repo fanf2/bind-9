@@ -1,5 +1,5 @@
 /*
- * Portions Copyright (C) 2004-2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Portions Copyright (C) 2004-2009, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
  * Portions Copyright (C) 1999-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -168,7 +168,9 @@ openssldsa_sign(dst_context_t *dctx, isc_buffer_t *sig) {
 	if (!EVP_SignFinal(evp_md_ctx, sigbuf, &siglen, pkey)) {
 		EVP_PKEY_free(pkey);
 		free(sigbuf);
-		return (ISC_R_FAILURE);
+		return (dst__openssl_toresult3(dctx->category,
+					       "EVP_SignFinal",
+					       ISC_R_FAILURE));
 	}
 	INSIST(EVP_PKEY_size(pkey) >= (int) siglen);
 	EVP_PKEY_free(pkey);
@@ -181,23 +183,31 @@ openssldsa_sign(dst_context_t *dctx, isc_buffer_t *sig) {
 	sb = sigbuf;
 	if (d2i_DSA_SIG(&dsasig, &sb, (long) siglen) == NULL) {
 		free(sigbuf);
-		return (ISC_R_FAILURE);
+		return (dst__openssl_toresult3(dctx->category,
+					       "d2i_DSA_SIG",
+					       ISC_R_FAILURE));
 	}
 	free(sigbuf);
 #elif 0
 	/* Only use EVP for the Digest */
 	if (!EVP_DigestFinal_ex(evp_md_ctx, digest, &siglen)) {
-		return (ISC_R_FAILURE);
+		return (dst__openssl_toresult3(dctx->category,
+					       "EVP_DigestFinal_ex",
+					       ISC_R_FAILURE));
 	}
 	dsasig = DSA_do_sign(digest, ISC_SHA1_DIGESTLENGTH, dsa);
 	if (dsasig == NULL)
-		return (dst__openssl_toresult(DST_R_SIGNFAILURE));
+		return (dst__openssl_toresult3(dctx->category,
+					       "DSA_do_sign",
+					       DST_R_SIGNFAILURE));
 #else
 	isc_sha1_final(sha1ctx, digest);
 
 	dsasig = DSA_do_sign(digest, ISC_SHA1_DIGESTLENGTH, dsa);
 	if (dsasig == NULL)
-		return (dst__openssl_toresult(DST_R_SIGNFAILURE));
+		return (dst__openssl_toresult3(dctx->category,
+					       "DSA_do_sign",
+					       DST_R_SIGNFAILURE));
 #endif
 	*r.base++ = (key->key_size - 512)/64;
 	BN_bn2bin_fixed(dsasig->r, r.base, ISC_SHA1_DIGESTLENGTH);
@@ -276,10 +286,16 @@ openssldsa_verify(dst_context_t *dctx, const isc_region_t *sig) {
 	status = DSA_do_verify(digest, ISC_SHA1_DIGESTLENGTH, dsasig, dsa);
 #endif
 	DSA_SIG_free(dsasig);
-	if (status != 1)
+	switch (status) {
+	case 1:
+		return (ISC_R_SUCCESS);
+	case 0:
 		return (dst__openssl_toresult(DST_R_VERIFYFAILURE));
-
-	return (ISC_R_SUCCESS);
+	default:
+		return (dst__openssl_toresult3(dctx->category,
+					       "DSA_do_verify",
+					       DST_R_VERIFYFAILURE));
+	}
 }
 
 static isc_boolean_t
@@ -370,19 +386,22 @@ openssldsa_generate(dst_key_t *key, int unused, void (*callback)(int)) {
 					&cb))
 	{
 		DSA_free(dsa);
-		return (dst__openssl_toresult(DST_R_OPENSSLFAILURE));
+		return (dst__openssl_toresult2("DSA_generate_parameters_ex",
+					       DST_R_OPENSSLFAILURE));
 	}
 #else
 	dsa = DSA_generate_parameters(key->key_size, rand_array,
 				      ISC_SHA1_DIGESTLENGTH, NULL, NULL,
 				      NULL, NULL);
 	if (dsa == NULL)
-		return (dst__openssl_toresult(DST_R_OPENSSLFAILURE));
+		return (dst__openssl_toresult2("DSA_generate_parameters",
+					       DST_R_OPENSSLFAILURE));
 #endif
 
 	if (DSA_generate_key(dsa) == 0) {
 		DSA_free(dsa);
-		return (dst__openssl_toresult(DST_R_OPENSSLFAILURE));
+		return (dst__openssl_toresult2("DSA_generate_key",
+					       DST_R_OPENSSLFAILURE));
 	}
 	dsa->flags &= ~DSA_FLAG_CACHE_MONT_P;
 
@@ -504,6 +523,11 @@ openssldsa_tofile(const dst_key_t *key, const char *directory) {
 	if (key->keydata.dsa == NULL)
 		return (DST_R_NULLKEY);
 
+	if (key->external) {
+		priv.nelements = 0;
+		return (dst__privstruct_writefile(key, &priv, directory));
+	}
+
 	dsa = key->keydata.dsa;
 
 	priv.elements[cnt].tag = TAG_DSA_PRIME;
@@ -550,6 +574,7 @@ openssldsa_parse(dst_key_t *key, isc_lex_t *lexer, dst_key_t *pub) {
 #define DST_RET(a) {ret = a; goto err;}
 
 	UNUSED(pub);
+
 	/* read private key file */
 	ret = dst__privstruct_parse(key, DST_ALG_DSA, lexer, mctx, &priv);
 	if (ret != ISC_R_SUCCESS)
@@ -588,6 +613,19 @@ openssldsa_parse(dst_key_t *key, isc_lex_t *lexer, dst_key_t *pub) {
 	}
 	dst__privstruct_free(&priv, mctx);
 
+	if (key->external) {
+		if (pub == NULL)
+			DST_RET(DST_R_INVALIDPRIVATEKEY);
+		dsa->q = pub->keydata.dsa->q;
+		pub->keydata.dsa->q = NULL;
+		dsa->p = pub->keydata.dsa->p;
+		pub->keydata.dsa->p = NULL;
+		dsa->g = pub->keydata.dsa->g;
+		pub->keydata.dsa->g =  NULL;
+		dsa->pub_key = pub->keydata.dsa->pub_key;
+		pub->keydata.dsa->pub_key = NULL;
+	}
+
 	key->key_size = BN_num_bits(dsa->p);
 
 	return (ISC_R_SUCCESS);
@@ -605,6 +643,7 @@ static dst_func_t openssldsa_functions = {
 	openssldsa_adddata,
 	openssldsa_sign,
 	openssldsa_verify,
+	NULL, /*%< verify2 */
 	NULL, /*%< computesecret */
 	openssldsa_compare,
 	NULL, /*%< paramcompare */

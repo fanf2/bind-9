@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2007, 2010  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2007, 2010, 2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2000-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -193,6 +193,18 @@ cfg_map_getname(const cfg_obj_t *mapobj);
  *	or NULL if the map object does not have a name.
  */
 
+unsigned int
+cfg_map_count(const cfg_obj_t *mapobj);
+/*%<
+ * Get the number of elements defined in the symbol table of a map object.
+ *
+ * Requires:
+ *    \li  'mapobj' points to a valid configuration object of a map type.
+ *
+ * Returns:
+ * \li     The number of elements in the map object.
+ */
+
 isc_boolean_t
 cfg_obj_istuple(const cfg_obj_t *obj);
 /*%<
@@ -303,6 +315,20 @@ cfg_obj_assockaddr(const cfg_obj_t *obj);
  *      if necessary.
  */
 
+isc_dscp_t
+cfg_obj_getdscp(const cfg_obj_t *obj);
+/*%<
+ * Returns the DSCP value of a configuration object representing a
+ * socket address.
+ *
+ * Requires:
+ * \li     'obj' points to a valid configuration object of a
+ *         socket address type.
+ *
+ * Returns:
+ * \li     DSCP value associated with a sockaddr, or -1.
+ */
+
 isc_boolean_t
 cfg_obj_isnetprefix(const cfg_obj_t *obj);
 /*%<
@@ -411,6 +437,10 @@ cfg_obj_destroy(cfg_parser_t *pctx, cfg_obj_t **obj);
 /*%<
  * Delete a reference to a configuration object; destroy the object if
  * there are no more references.
+ *
+ * Require:
+ * \li     '*obj' is a valid cfg_obj_t.
+ * \li     'pctx' is a valid cfg_parser_t.
  */
 
 void

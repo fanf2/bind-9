@@ -1,4 +1,4 @@
-# Copyright (C) 2004-2011  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
 # Copyright (C) 1998-2002  Internet Software Consortium.
 #
 # Permission to use, copy, modify, and/or distribute this software for any
@@ -20,6 +20,12 @@ VPATH =		@srcdir@
 top_srcdir =	@top_srcdir@
 
 @BIND9_VERSION@
+
+@BIND9_PRODUCT@
+
+@BIND9_DESCRIPTION@
+
+@BIND9_SRCID@
 
 @BIND9_CONFIGARGS@
 
@@ -79,8 +85,10 @@ SUBDIRS =	unix
 
 TARGETS =	named@EXEEXT@ lwresd@EXEEXT@
 
+GEOIPLINKOBJS = geoip.@O@
+
 OBJS =		builtin.@O@ client.@O@ config.@O@ control.@O@ \
-		controlconf.@O@ interfacemgr.@O@ \
+		controlconf.@O@ @GEOIPLINKOBJS@ interfacemgr.@O@ \
 		listenlist.@O@ log.@O@ logconf.@O@ main.@O@ notify.@O@ \
 		query.@O@ server.@O@ sortlist.@O@ statschannel.@O@ \
 		tkeyconf.@O@ tsigconf.@O@ update.@O@ xfrout.@O@ \
@@ -93,8 +101,10 @@ UOBJS =		unix/os.@O@ unix/dlz_dlopen_driver.@O@
 
 SYMOBJS =	symtbl.@O@
 
+GEOIPLINKSRCS = geoip.c
+
 SRCS =		builtin.c client.c config.c control.c \
-		controlconf.c interfacemgr.c \
+		controlconf.c @GEOIPLINKSRCS@ interfacemgr.c \
 		listenlist.c log.c logconf.c main.c notify.c \
 		query.c server.c sortlist.c statschannel.c symtbl.c symtbl-empty.c \
 		tkeyconf.c tsigconf.c update.c xfrout.c \
@@ -114,6 +124,9 @@ MANOBJS =	${MANPAGES} ${HTMLPAGES}
 main.@O@: main.c
 	${LIBTOOL_MODE_COMPILE} ${CC} ${ALL_CFLAGS} \
 		-DVERSION=\"${VERSION}\" \
+		-DPRODUCT=\"${PRODUCT}\" \
+		-DDESCRIPTION=\"${DESCRIPTION}\" \
+		-DSRCID=\"${SRCID}\" \
 		-DCONFIGARGS="\"${CONFIGARGS}\"" \
 		-DNS_LOCALSTATEDIR=\"${localstatedir}\" \
 		-DNS_SYSCONFDIR=\"${sysconfdir}\" -c ${srcdir}/main.c
@@ -124,6 +137,7 @@ bind.keys.h: ${top_srcdir}/bind.keys ${srcdir}/bindkeys.pl
 config.@O@: config.c bind.keys.h
 	${LIBTOOL_MODE_COMPILE} ${CC} ${ALL_CFLAGS} \
 		-DVERSION=\"${VERSION}\" \
+		-DSRCID=\"${SRCID}\" \
 		-DNS_LOCALSTATEDIR=\"${localstatedir}\" \
 		-DNS_SYSCONFDIR=\"${sysconfdir}\" \
 		-c ${srcdir}/config.c
@@ -167,3 +181,6 @@ install:: named@EXEEXT@ lwresd@EXEEXT@ installdirs
 	${INSTALL_DATA} ${srcdir}/named.conf.5 ${DESTDIR}${mandir}/man5
 
 @DLZ_DRIVER_RULES@
+
+named-symtbl.@O@: named-symtbl.c
+	${LIBTOOL_MODE_COMPILE} ${CC} ${ALL_CFLAGS} -c named-symtbl.c

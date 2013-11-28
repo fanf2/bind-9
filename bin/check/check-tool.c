@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2000-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -86,6 +86,7 @@
 static const char *dbtype[] = { "rbt" };
 
 int debug = 0;
+const char *journal = NULL;
 isc_boolean_t nomerge = ISC_TRUE;
 #if CHECK_LOCAL
 isc_boolean_t docheckmx = ISC_TRUE;
@@ -196,6 +197,10 @@ checkns(dns_zone_t *zone, dns_name_t *name, dns_name_t *owner,
 		a->type == dns_rdatatype_a);
 	REQUIRE(aaaa == NULL || !dns_rdataset_isassociated(aaaa) ||
 		aaaa->type == dns_rdatatype_aaaa);
+
+	if (a == NULL || aaaa == NULL)
+		return (answer);
+
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_flags = AI_CANONNAME;
 	hints.ai_family = PF_UNSPEC;
@@ -258,8 +263,7 @@ checkns(dns_zone_t *zone, dns_name_t *name, dns_name_t *owner,
 		}
 		return (ISC_TRUE);
 	}
-	if (a == NULL || aaaa == NULL)
-		return (answer);
+
 	/*
 	 * Check that all glue records really exist.
 	 */
@@ -597,7 +601,7 @@ load_zone(isc_mem_t *mctx, const char *zonename, const char *filename,
 
 	dns_zone_settype(zone, dns_zone_master);
 
-	isc_buffer_init(&buffer, zonename, strlen(zonename));
+	isc_buffer_constinit(&buffer, zonename, strlen(zonename));
 	isc_buffer_add(&buffer, strlen(zonename));
 	dns_fixedname_init(&fixorigin);
 	origin = dns_fixedname_name(&fixorigin);
@@ -605,6 +609,8 @@ load_zone(isc_mem_t *mctx, const char *zonename, const char *filename,
 	CHECK(dns_zone_setorigin(zone, origin));
 	CHECK(dns_zone_setdbtype(zone, 1, (const char * const *) dbtype));
 	CHECK(dns_zone_setfile2(zone, filename, fileformat));
+	if (journal != NULL)
+		CHECK(dns_zone_setjournal(zone, journal));
 
 	DE_CONST(classname, region.base);
 	region.length = strlen(classname);
@@ -640,6 +646,9 @@ dump_zone(const char *zonename, dns_zone_t *zone, const char *filename,
 {
 	isc_result_t result;
 	FILE *output = stdout;
+	const char *flags;
+
+	flags = (fileformat == dns_masterformat_text) ? "w+" : "wb+";
 
 	if (debug) {
 		if (filename != NULL && strcmp(filename, "-") != 0)
@@ -650,7 +659,7 @@ dump_zone(const char *zonename, dns_zone_t *zone, const char *filename,
 	}
 
 	if (filename != NULL && strcmp(filename, "-") != 0) {
-		result = isc_stdio_open(filename, "w+", &output);
+		result = isc_stdio_open(filename, flags, &output);
 
 		if (result != ISC_R_SUCCESS) {
 			fprintf(stderr, "could not open output "

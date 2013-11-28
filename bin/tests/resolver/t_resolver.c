@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2011-2013  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -53,9 +53,9 @@ setup_create_dispatch_v4(void)
 	isc_sockaddr_t local_address;
 	isc_sockaddr_any(&local_address);
 
-	CHECK(dns_dispatch_getudp(dispatch_manager, socket_manager, task_manager,
-				  &local_address, 4096, 100, 100, 100, 500,
-				  0, 0, /* unsigned int attributes, unsigned int mask, */
+	CHECK(dns_dispatch_getudp(dispatch_manager, socket_manager,
+				  task_manager, &local_address,
+				  4096, 100, 100, 100, 500, 0, 0,
 				  &dispatch_v4));
 }
 static void
@@ -85,7 +85,7 @@ make_resolver(dns_resolver_t **resolverp) {
 	isc_result_t result;
 
 	result = dns_resolver_create(view,
-			    task_manager, 1,
+			    task_manager, 1, 1,
 			    socket_manager,
 			    timer_manager,
 			    0, /* unsigned int options, */
@@ -154,11 +154,11 @@ test_dns_resolver_settimeout(void) {
 	t_info("The default timeout is %d second%s\n", default_timeout,
 	       (default_timeout == 1 ? "" : "s"));
 
-	dns_resolver_settimeout(resolver, default_timeout - 1);
+	dns_resolver_settimeout(resolver, default_timeout + 1);
 	timeout = dns_resolver_gettimeout(resolver);
 	t_info("The new timeout is %d second%s\n", timeout,
 	       (timeout == 1 ? "" : "s"));
-	test_result = (timeout == default_timeout - 1) ? T_PASS : T_FAIL;
+	test_result = (timeout == default_timeout + 1) ? T_PASS : T_FAIL;
 
 	destroy_resolver(&resolver);
 	teardown();

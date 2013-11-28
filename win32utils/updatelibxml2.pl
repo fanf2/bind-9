@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Copyright (C) 2009, 2010, 2012  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2009, 2010, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -49,6 +49,8 @@ $path = "..\\..\\";
              "../bin/dnssec/win32/dnssectool.dsp",
              "../bin/dnssec/win32/dsfromkey.dsp",
              "../bin/dnssec/win32/dsfromkey.mak",
+             "../bin/dnssec/win32/importkey.dsp",
+             "../bin/dnssec/win32/importkey.mak",
              "../bin/dnssec/win32/keyfromlabel.dsp",
              "../bin/dnssec/win32/keyfromlabel.mak",
              "../bin/dnssec/win32/keygen.dsp",
@@ -59,6 +61,8 @@ $path = "..\\..\\";
              "../bin/dnssec/win32/settime.mak",
              "../bin/dnssec/win32/signzone.dsp",
              "../bin/dnssec/win32/signzone.mak",
+             "../bin/dnssec/win32/verify.dsp",
+             "../bin/dnssec/win32/verify.mak",
              "../bin/named/win32/named.dsp",
              "../bin/named/win32/named.mak",
              "../bin/nsupdate/win32/nsupdate.dsp",
@@ -67,6 +71,8 @@ $path = "..\\..\\";
              "../bin/rndc/win32/rndc.mak",
              "../bin/tools/win32/journalprint.dsp",
              "../bin/tools/win32/journalprint.mak",
+             "../bin/tools/win32/rrchecker.dsp",
+             "../bin/tools/win32/rrchecker.mak",
              "../lib/bind9/win32/libbind9.dsp",
              "../lib/bind9/win32/libbind9.mak",
              "../lib/dns/win32/libdns.dsp",

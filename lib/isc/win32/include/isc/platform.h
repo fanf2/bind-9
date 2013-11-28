@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2009  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2005, 2007-2009, 2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2001  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -24,7 +24,7 @@
  ***** Platform-dependent defines.
  *****/
 
-#define ISC_PLATFORM_USETHREADS
+#define ISC_PLATFORM_USETHREADS 1
 
 /***
  *** Network.

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -247,7 +247,8 @@ ixfr_rrstream_create(isc_mem_t *mctx,
 	s = isc_mem_get(mctx, sizeof(*s));
 	if (s == NULL)
 		return (ISC_R_NOMEMORY);
-	s->common.mctx = mctx;
+	s->common.mctx = NULL;
+	isc_mem_attach(mctx, &s->common.mctx);
 	s->common.methods = &ixfr_rrstream_methods;
 	s->journal = NULL;
 
@@ -289,7 +290,7 @@ ixfr_rrstream_destroy(rrstream_t **rsp) {
 	ixfr_rrstream_t *s = (ixfr_rrstream_t *) *rsp;
 	if (s->journal != 0)
 		dns_journal_destroy(&s->journal);
-	isc_mem_put(s->common.mctx, s, sizeof(*s));
+	isc_mem_putanddetach(&s->common.mctx, s, sizeof(*s));
 }
 
 static rrstream_methods_t ixfr_rrstream_methods = {
@@ -335,7 +336,8 @@ axfr_rrstream_create(isc_mem_t *mctx, dns_db_t *db, dns_dbversion_t *ver,
 	s = isc_mem_get(mctx, sizeof(*s));
 	if (s == NULL)
 		return (ISC_R_NOMEMORY);
-	s->common.mctx = mctx;
+	s->common.mctx = NULL;
+	isc_mem_attach(mctx, &s->common.mctx);
 	s->common.methods = &axfr_rrstream_methods;
 	s->it_valid = ISC_FALSE;
 
@@ -413,7 +415,7 @@ axfr_rrstream_destroy(rrstream_t **rsp) {
 	axfr_rrstream_t *s = (axfr_rrstream_t *) *rsp;
 	if (s->it_valid)
 		dns_rriterator_destroy(&s->it);
-	isc_mem_put(s->common.mctx, s, sizeof(*s));
+	isc_mem_putanddetach(&s->common.mctx, s, sizeof(*s));
 }
 
 static rrstream_methods_t axfr_rrstream_methods = {
@@ -455,7 +457,8 @@ soa_rrstream_create(isc_mem_t *mctx, dns_db_t *db, dns_dbversion_t *ver,
 	s = isc_mem_get(mctx, sizeof(*s));
 	if (s == NULL)
 		return (ISC_R_NOMEMORY);
-	s->common.mctx = mctx;
+	s->common.mctx = NULL;
+	isc_mem_attach(mctx, &s->common.mctx);
 	s->common.methods = &soa_rrstream_methods;
 	s->soa_tuple = NULL;
 
@@ -497,7 +500,7 @@ soa_rrstream_destroy(rrstream_t **rsp) {
 	soa_rrstream_t *s = (soa_rrstream_t *) *rsp;
 	if (s->soa_tuple != NULL)
 		dns_difftuple_free(&s->soa_tuple);
-	isc_mem_put(s->common.mctx, s, sizeof(*s));
+	isc_mem_putanddetach(&s->common.mctx, s, sizeof(*s));
 }
 
 static rrstream_methods_t soa_rrstream_methods = {
@@ -561,7 +564,8 @@ compound_rrstream_create(isc_mem_t *mctx, rrstream_t **soa_stream,
 	s = isc_mem_get(mctx, sizeof(*s));
 	if (s == NULL)
 		return (ISC_R_NOMEMORY);
-	s->common.mctx = mctx;
+	s->common.mctx = NULL;
+	isc_mem_attach(mctx, &s->common.mctx);
 	s->common.methods = &compound_rrstream_methods;
 	s->components[0] = *soa_stream;
 	s->components[1] = *data_stream;
@@ -634,7 +638,7 @@ compound_rrstream_destroy(rrstream_t **rsp) {
 	s->components[0]->methods->destroy(&s->components[0]);
 	s->components[1]->methods->destroy(&s->components[1]);
 	s->components[2] = NULL; /* Copy of components[0]. */
-	isc_mem_put(s->common.mctx, s, sizeof(*s));
+	isc_mem_putanddetach(&s->common.mctx, s, sizeof(*s));
 }
 
 static rrstream_methods_t compound_rrstream_methods = {
@@ -751,6 +755,8 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 	char keyname[DNS_NAME_FORMATSIZE];
 	isc_boolean_t is_poll = ISC_FALSE;
 	isc_boolean_t is_dlz = ISC_FALSE;
+	isc_boolean_t is_ixfr = ISC_FALSE;
+	isc_uint32_t begin_serial = 0, current_serial;
 
 	switch (reqtype) {
 	case dns_rdatatype_axfr:
@@ -807,7 +813,8 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 		 * Normal zone table does not have a match.
 		 * Try the DLZ database
 		 */
-		if (client->view->dlzdatabase != NULL) {
+		// Temporary: only searching the first DLZ database
+		if (! ISC_LIST_EMPTY(client->view->dlz_searched)) {
 			result = dns_dlzallowzonexfr(client->view,
 						     question_name,
 						     &client->peeraddr,
@@ -833,14 +840,6 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 				FAILQ(DNS_R_NOTAUTH, "non-authoritative zone",
 				      question_name, question_class);
 			is_dlz = ISC_TRUE;
-			/*
-			 * DLZ only support full zone transfer, not incremental
-			 */
-			if (reqtype != dns_rdatatype_axfr) {
-				mnemonic = "AXFR-style IXFR";
-				reqtype = dns_rdatatype_axfr;
-			}
-
 		} else {
 			/*
 			 * not DLZ and not in normal zone table, we are
@@ -852,12 +851,14 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 	} else {
 		/* zone table has a match */
 		switch(dns_zone_gettype(zone)) {
+			/* Master and slave zones are OK for transfer. */
 			case dns_zone_master:
 			case dns_zone_slave:
 			case dns_zone_dlz:
-				break;	/* Master and slave zones are OK for transfer. */
+				break;
 			default:
-				FAILQ(DNS_R_NOTAUTH, "non-authoritative zone", question_name, question_class);
+				FAILQ(DNS_R_NOTAUTH, "non-authoritative zone",
+				      question_name, question_class);
 			}
 		CHECK(dns_zone_getdb(zone, &db));
 		dns_db_currentversion(db, &ver);
@@ -953,8 +954,8 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 	CHECK(dns_db_createsoatuple(db, ver, mctx, DNS_DIFFOP_EXISTS,
 				    &current_soa_tuple));
 
+	current_serial = dns_soa_getserial(&current_soa_tuple->rdata);
 	if (reqtype == dns_rdatatype_ixfr) {
-		isc_uint32_t begin_serial, current_serial;
 		isc_boolean_t provide_ixfr;
 
 		/*
@@ -972,7 +973,6 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 			      "IXFR request missing SOA");
 
 		begin_serial = dns_soa_getserial(&soa_rdata);
-		current_serial = dns_soa_getserial(&current_soa_tuple->rdata);
 
 		/*
 		 * RFC1995 says "If an IXFR query with the same or
@@ -992,7 +992,7 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 			is_poll = ISC_TRUE;
 			goto have_stream;
 		}
-		journalfile = dns_zone_getjournal(zone);
+		journalfile = is_dlz ? NULL : dns_zone_getjournal(zone);
 		if (journalfile != NULL)
 			result = ixfr_rrstream_create(mctx,
 						      journalfile,
@@ -1011,10 +1011,10 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 			goto axfr_fallback;
 		}
 		CHECK(result);
+		is_ixfr = ISC_TRUE;
 	} else {
 	axfr_fallback:
-		CHECK(axfr_rrstream_create(mctx, db, ver,
-					   &data_stream));
+		CHECK(axfr_rrstream_create(mctx, db, ver, &data_stream));
 	}
 
 	/*
@@ -1072,10 +1072,16 @@ ns_xfr_start(ns_client_t *client, dns_rdatatype_t reqtype) {
 		xfrout_log1(client, question_name, question_class,
 			    ISC_LOG_DEBUG(1), "IXFR poll up to date%s%s",
 			    (xfr->tsigkey != NULL) ? ": TSIG " : "", keyname);
+	else if (is_ixfr)
+		xfrout_log1(client, question_name, question_class,
+			    ISC_LOG_INFO, "%s started%s%s (serial %u -> %u)",
+			    mnemonic, (xfr->tsigkey != NULL) ? ": TSIG " : "",
+			    keyname, begin_serial, current_serial);
 	else
 		xfrout_log1(client, question_name, question_class,
-			    ISC_LOG_INFO, "%s started%s%s", mnemonic,
-			    (xfr->tsigkey != NULL) ? ": TSIG " : "", keyname);
+			    ISC_LOG_INFO, "%s started%s%s (serial %u)",
+			    mnemonic, (xfr->tsigkey != NULL) ? ": TSIG " : "",
+			    keyname, current_serial);
 
 	/*
 	 * Hand the context over to sendstream().  Set xfr to NULL;

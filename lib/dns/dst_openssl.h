@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2009, 2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2005, 2007-2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -21,6 +21,7 @@
 #define DST_OPENSSL_H 1
 
 #include <isc/lang.h>
+#include <isc/log.h>
 #include <isc/result.h>
 
 #include <openssl/err.h>
@@ -38,6 +39,13 @@ ISC_LANG_BEGINDECLS
 
 isc_result_t
 dst__openssl_toresult(isc_result_t fallback);
+
+isc_result_t
+dst__openssl_toresult2(const char *funcname, isc_result_t fallback);
+
+isc_result_t
+dst__openssl_toresult3(isc_logcategory_t *category,
+		       const char *funcname, isc_result_t fallback);
 
 #ifdef USE_ENGINE
 ENGINE *

@@ -1,4 +1,4 @@
-# Copyright (C) 2005-2007, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2005-2007, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -12,10 +12,13 @@
 # OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 # PERFORMANCE OF THIS SOFTWARE.
 
-# $Id$
+# $Id: setup.sh,v 1.11 2012/02/14 23:47:15 tbox Exp $
 
 rm -f named-compilezone
 ln -s $CHECKZONE named-compilezone
+
+../../../tools/genrandom 400 random.data
+
 rm -f ns1/example.db.raw
 cp ns1/example.db ns2/
 cp ns2/formerly-text.db.in ns2/formerly-text.db

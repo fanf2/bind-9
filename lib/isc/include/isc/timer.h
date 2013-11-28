@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2009  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2009, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1998-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -86,6 +86,7 @@ ISC_LANG_BEGINDECLS
 
 /*% Timer Type */
 typedef enum {
+	isc_timertype_undefined = -1,	/*%< Undefined */
 	isc_timertype_ticker = 0, 	/*%< Ticker */
 	isc_timertype_once = 1, 	/*%< Once */
 	isc_timertype_limited = 2, 	/*%< Limited */
@@ -108,8 +109,8 @@ typedef struct {
 	void		(*destroy)(isc_timermgr_t **managerp);
 	isc_result_t	(*timercreate)(isc_timermgr_t *manager,
 				       isc_timertype_t type,
-				       isc_time_t *expires,
-				       isc_interval_t *interval,
+				       const isc_time_t *expires,
+				       const isc_interval_t *interval,
 				       isc_task_t *task,
 				       isc_taskaction_t action,
 				       const void *arg,
@@ -120,7 +121,8 @@ typedef struct {
 	void		(*attach)(isc_timer_t *timer, isc_timer_t **timerp);
 	void		(*detach)(isc_timer_t **timerp);
 	isc_result_t	(*reset)(isc_timer_t *timer, isc_timertype_t type,
-				 isc_time_t *expires, isc_interval_t *interval,
+				 const isc_time_t *expires,
+				 const isc_interval_t *interval,
 				 isc_boolean_t purge);
 	isc_result_t	(*touch)(isc_timer_t *timer);
 } isc_timermethods_t;
@@ -168,8 +170,8 @@ struct isc_timer {
 isc_result_t
 isc_timer_create(isc_timermgr_t *manager,
 		 isc_timertype_t type,
-		 isc_time_t *expires,
-		 isc_interval_t *interval,
+		 const isc_time_t *expires,
+		 const isc_interval_t *interval,
 		 isc_task_t *task,
 		 isc_taskaction_t action,
 		 const void *arg,
@@ -232,8 +234,8 @@ isc_timer_create(isc_timermgr_t *manager,
 isc_result_t
 isc_timer_reset(isc_timer_t *timer,
 		isc_timertype_t type,
-		isc_time_t *expires,
-		isc_interval_t *interval,
+		const isc_time_t *expires,
+		const isc_interval_t *interval,
 		isc_boolean_t purge);
 /*%<
  * Change the timer's type, expires, and interval values to the given
@@ -401,7 +403,6 @@ isc_timermgr_destroy(isc_timermgr_t **managerp);
 
 void isc_timermgr_poke(isc_timermgr_t *m);
 
-#ifdef USE_TIMERIMPREGISTER
 /*%<
  * See isc_timermgr_create() above.
  */
@@ -424,7 +425,6 @@ isc_timer_register(isc_timermgrcreatefunc_t createfunc);
  * usually do not have to care about this function: it would call
  * isc_lib_register(), which internally calls this function.
  */
-#endif /* USE_TIMERIMPREGISTER */
 
 ISC_LANG_ENDDECLS
 

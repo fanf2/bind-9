@@ -1,5 +1,5 @@
 /*
- * Portions Copyright (C) 2004-2011  Internet Systems Consortium, Inc. ("ISC")
+ * Portions Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Portions Copyright (C) 1999-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -42,6 +42,7 @@
 #include <isc/md5.h>
 #include <isc/sha1.h>
 #include <isc/mem.h>
+#include <isc/safe.h>
 #include <isc/string.h>
 #include <isc/util.h>
 
@@ -138,7 +139,7 @@ hmacmd5_compare(const dst_key_t *key1, const dst_key_t *key2) {
 	else if (hkey1 == NULL || hkey2 == NULL)
 		return (ISC_FALSE);
 
-	if (memcmp(hkey1->key, hkey2->key, ISC_SHA1_BLOCK_LENGTH) == 0)
+	if (isc_safe_memcmp(hkey1->key, hkey2->key, ISC_SHA1_BLOCK_LENGTH))
 		return (ISC_TRUE);
 	else
 		return (ISC_FALSE);
@@ -313,6 +314,7 @@ static dst_func_t hmacmd5_functions = {
 	hmacmd5_adddata,
 	hmacmd5_sign,
 	hmacmd5_verify,
+	NULL, /*%< verify2 */
 	NULL, /*%< computesecret */
 	hmacmd5_compare,
 	NULL, /*%< paramcompare */
@@ -414,7 +416,7 @@ hmacsha1_compare(const dst_key_t *key1, const dst_key_t *key2) {
 	else if (hkey1 == NULL || hkey2 == NULL)
 		return (ISC_FALSE);
 
-	if (memcmp(hkey1->key, hkey2->key, ISC_SHA1_BLOCK_LENGTH) == 0)
+	if (isc_safe_memcmp(hkey1->key, hkey2->key, ISC_SHA1_BLOCK_LENGTH))
 		return (ISC_TRUE);
 	else
 		return (ISC_FALSE);
@@ -589,6 +591,7 @@ static dst_func_t hmacsha1_functions = {
 	hmacsha1_adddata,
 	hmacsha1_sign,
 	hmacsha1_verify,
+	NULL, /* verify2 */
 	NULL, /* computesecret */
 	hmacsha1_compare,
 	NULL, /* paramcompare */
@@ -690,7 +693,7 @@ hmacsha224_compare(const dst_key_t *key1, const dst_key_t *key2) {
 	else if (hkey1 == NULL || hkey2 == NULL)
 		return (ISC_FALSE);
 
-	if (memcmp(hkey1->key, hkey2->key, ISC_SHA224_BLOCK_LENGTH) == 0)
+	if (isc_safe_memcmp(hkey1->key, hkey2->key, ISC_SHA224_BLOCK_LENGTH))
 		return (ISC_TRUE);
 	else
 		return (ISC_FALSE);
@@ -867,6 +870,7 @@ static dst_func_t hmacsha224_functions = {
 	hmacsha224_adddata,
 	hmacsha224_sign,
 	hmacsha224_verify,
+	NULL, /* verify2 */
 	NULL, /* computesecret */
 	hmacsha224_compare,
 	NULL, /* paramcompare */
@@ -968,7 +972,7 @@ hmacsha256_compare(const dst_key_t *key1, const dst_key_t *key2) {
 	else if (hkey1 == NULL || hkey2 == NULL)
 		return (ISC_FALSE);
 
-	if (memcmp(hkey1->key, hkey2->key, ISC_SHA256_BLOCK_LENGTH) == 0)
+	if (isc_safe_memcmp(hkey1->key, hkey2->key, ISC_SHA256_BLOCK_LENGTH))
 		return (ISC_TRUE);
 	else
 		return (ISC_FALSE);
@@ -1145,6 +1149,7 @@ static dst_func_t hmacsha256_functions = {
 	hmacsha256_adddata,
 	hmacsha256_sign,
 	hmacsha256_verify,
+	NULL, /* verify2 */
 	NULL, /* computesecret */
 	hmacsha256_compare,
 	NULL, /* paramcompare */
@@ -1246,7 +1251,7 @@ hmacsha384_compare(const dst_key_t *key1, const dst_key_t *key2) {
 	else if (hkey1 == NULL || hkey2 == NULL)
 		return (ISC_FALSE);
 
-	if (memcmp(hkey1->key, hkey2->key, ISC_SHA384_BLOCK_LENGTH) == 0)
+	if (isc_safe_memcmp(hkey1->key, hkey2->key, ISC_SHA384_BLOCK_LENGTH))
 		return (ISC_TRUE);
 	else
 		return (ISC_FALSE);
@@ -1423,6 +1428,7 @@ static dst_func_t hmacsha384_functions = {
 	hmacsha384_adddata,
 	hmacsha384_sign,
 	hmacsha384_verify,
+	NULL, /* verify2 */
 	NULL, /* computesecret */
 	hmacsha384_compare,
 	NULL, /* paramcompare */
@@ -1524,7 +1530,7 @@ hmacsha512_compare(const dst_key_t *key1, const dst_key_t *key2) {
 	else if (hkey1 == NULL || hkey2 == NULL)
 		return (ISC_FALSE);
 
-	if (memcmp(hkey1->key, hkey2->key, ISC_SHA512_BLOCK_LENGTH) == 0)
+	if (isc_safe_memcmp(hkey1->key, hkey2->key, ISC_SHA512_BLOCK_LENGTH))
 		return (ISC_TRUE);
 	else
 		return (ISC_FALSE);
@@ -1701,6 +1707,7 @@ static dst_func_t hmacsha512_functions = {
 	hmacsha512_adddata,
 	hmacsha512_sign,
 	hmacsha512_verify,
+	NULL, /* verify2 */
 	NULL, /* computesecret */
 	hmacsha512_compare,
 	NULL, /* paramcompare */

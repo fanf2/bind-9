@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -404,7 +404,6 @@ do_one_tuple(dns_difftuple_t **tuple, dns_db_t *db, dns_dbversion_t *ver,
 	 * Create a singleton diff.
 	 */
 	dns_diff_init(diff->mctx, &temp_diff);
-	temp_diff.resign = diff->resign;
 	ISC_LIST_APPEND(temp_diff.tuples, *tuple, link);
 
 	/*
@@ -2369,7 +2368,8 @@ add_signing_records(dns_db_t *db, dns_rdatatype_t privatetype,
 		ISC_LIST_UNLINK(temp_diff.tuples, tuple, link);
 		ISC_LIST_APPEND(diff->tuples, tuple, link);
 
-		dns_rdata_tostruct(&tuple->rdata, &dnskey, NULL);
+		result = dns_rdata_tostruct(&tuple->rdata, &dnskey, NULL);
+		RUNTIME_CHECK(result == ISC_R_SUCCESS);
 		if ((dnskey.flags &
 		     (DNS_KEYFLAG_OWNERMASK|DNS_KEYTYPE_NOAUTH))
 			 != DNS_KEYOWNER_ZONE)
@@ -2858,13 +2858,30 @@ update_action(isc_task_t *task, isc_event_t *event) {
 			if (isc_log_wouldlog(ns_g_lctx, LOGLEVEL_PROTOCOL)) {
 				char namestr[DNS_NAME_FORMATSIZE];
 				char typestr[DNS_RDATATYPE_FORMATSIZE];
-				dns_name_format(name, namestr,
-						sizeof(namestr));
+				char rdstr[2048];
+				isc_buffer_t buf;
+				int len = 0;
+				const char *truncated = "";
+
+				dns_name_format(name, namestr, sizeof(namestr));
 				dns_rdatatype_format(rdata.type, typestr,
 						     sizeof(typestr));
+				isc_buffer_init(&buf, rdstr, sizeof(rdstr));
+				result = dns_rdata_totext(&rdata, NULL, &buf);
+				if (result == ISC_R_NOSPACE) {
+					len = (int)isc_buffer_usedlength(&buf);
+					truncated = " [TRUNCATED]";
+				} else if (result != ISC_R_SUCCESS) {
+					snprintf(rdstr, sizeof(rdstr), "[dns_"
+						 "rdata_totext failed: %s]",
+						 dns_result_totext(result));
+					len = strlen(rdstr);
+				} else
+					len = (int)isc_buffer_usedlength(&buf);
 				update_log(client, zone, LOGLEVEL_PROTOCOL,
-					   "adding an RR at '%s' %s",
-					   namestr, typestr);
+					   "adding an RR at '%s' %s %.*s%s",
+					   namestr, typestr, len, rdstr,
+					   truncated);
 			}
 
 			/* Prepare the affected RRset for the addition. */
@@ -3341,6 +3358,8 @@ forward_action(isc_task_t *task, isc_event_t *event) {
 
 static isc_result_t
 send_forward_event(ns_client_t *client, dns_zone_t *zone) {
+	char namebuf[DNS_NAME_FORMATSIZE];
+	char classbuf[DNS_RDATACLASS_FORMATSIZE];
 	isc_result_t result = ISC_R_SUCCESS;
 	update_event_t *event = NULL;
 	isc_task_t *zonetask = NULL;
@@ -3365,6 +3384,15 @@ send_forward_event(ns_client_t *client, dns_zone_t *zone) {
 	INSIST(client->nupdates == 0);
 	client->nupdates++;
 	event->ev_arg = evclient;
+
+	dns_name_format(dns_zone_getorigin(zone), namebuf,
+			sizeof(namebuf));
+	dns_rdataclass_format(dns_zone_getclass(zone), classbuf,
+			      sizeof(classbuf));
+
+	ns_client_log(client, NS_LOGCATEGORY_UPDATE, NS_LOGMODULE_UPDATE,
+		      LOGLEVEL_PROTOCOL, "forwarding update for zone '%s/%s'",
+		      namebuf, classbuf);
 
 	dns_zone_gettask(zone, &zonetask);
 	isc_task_send(zonetask, ISC_EVENT_PTR(&event));

@@ -1,5 +1,5 @@
 /*
- * Portions Copyright (C) 2004-2010  Internet Systems Consortium, Inc. ("ISC")
+ * Portions Copyright (C) 2004-2010, 2013  Internet Systems Consortium, Inc. ("ISC")
  * Portions Copyright (C) 2001, 2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -152,12 +152,16 @@ const FileData installFiles[] =
 	{"dnssec-keygen.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"dnssec-signzone.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"dnssec-dsfromkey.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+	{"dnssec-importkey.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"dnssec-keyfromlabel.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"dnssec-revoke.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+	{"dnssec-settime.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+	{"dnssec-verify.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"named-checkconf.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"named-checkzone.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"named-compilezone.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"named-journalprint.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+	{"named-rrchecker.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"isc-hmax-fixup.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"pkcs11-destroy.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"pkcs11-keygen.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},

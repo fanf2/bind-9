@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2001-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -71,8 +71,9 @@ options {\n\
 	host-statistics no;\n\
 	interface-interval 60;\n\
 	listen-on {any;};\n\
-	listen-on-v6 {none;};\n\
+	listen-on-v6 {any;};\n\
 	match-mapped-addresses no;\n\
+	max-rsa-exponent-size 0; /* no limit */\n\
 	memstatistics-file \"named.memstats\";\n\
 	multiple-cnames no;\n\
 #	named-xfer <obsolete>;\n\
@@ -89,7 +90,7 @@ options {\n\
 #endif
 "\
 	recursive-clients 1000;\n\
-	resolver-query-timeout 30;\n\
+	resolver-query-timeout 10;\n\
 	rrset-order { order random; };\n\
 	serial-queries 20;\n\
 	serial-query-rate 20;\n\
@@ -97,7 +98,7 @@ options {\n\
 	statistics-file \"named.stats\";\n\
 	statistics-interval 60;\n\
 	tcp-clients 100;\n\
-	tcp-listen-queue 3;\n\
+	tcp-listen-queue 10;\n\
 #	tkey-dhkey <none>\n\
 #	tkey-gssapi-credential <none>\n\
 #	tkey-domain <none>\n\
@@ -150,6 +151,7 @@ options {\n\
 	check-names response ignore;\n\
 	check-dup-records warn;\n\
 	check-mx warn;\n\
+	check-spf warn;\n\
 	acache-enable no;\n\
 	acache-cleaning-interval 60;\n\
 	max-acache-size 16M;\n\
@@ -162,8 +164,9 @@ options {\n\
 	nsec3-test-zone no;\n\
 	allow-new-zones no;\n\
 "
-#ifdef ALLOW_FILTER_AAAA_ON_V4
+#ifdef ALLOW_FILTER_AAAA
 "	filter-aaaa-on-v4 no;\n\
+	filter-aaaa-on-v6 no;\n\
 	filter-aaaa { any; };\n\
 "
 #endif
@@ -200,7 +203,7 @@ options {\n\
 	sig-signing-signatures 10;\n\
 	sig-signing-type 65534;\n\
 	inline-signing no;\n\
-	zone-statistics false;\n\
+	zone-statistics terse;\n\
 	max-journal-size unlimited;\n\
 	ixfr-from-differences false;\n\
 	check-wildcard yes;\n\
@@ -225,6 +228,13 @@ view \"_bind\" chaos {\n\
 	recursion no;\n\
 	notify no;\n\
 	allow-new-zones no;\n\
+\n\
+	# Prevent use of this zone in DNS amplified reflection DoS attacks\n\
+	rate-limit {\n\
+		responses-per-second 3;\n\
+		slip 0;\n\
+		min-table-size 10;\n\
+	};\n\
 \n\
 	zone \"version.bind\" chaos {\n\
 		type master;\n\
@@ -270,7 +280,9 @@ ns_config_parsedefaults(cfg_parser_t *parser, cfg_obj_t **conf) {
 }
 
 isc_result_t
-ns_config_get(const cfg_obj_t **maps, const char *name, const cfg_obj_t **obj) {
+ns_config_get(cfg_obj_t const * const *maps, const char *name,
+	      const cfg_obj_t **obj)
+{
 	int i;
 
 	for (i = 0;; i++) {
@@ -393,17 +405,20 @@ ns_config_getzonetype(const cfg_obj_t *zonetypeobj) {
 isc_result_t
 ns_config_getiplist(const cfg_obj_t *config, const cfg_obj_t *list,
 		    in_port_t defport, isc_mem_t *mctx,
-		    isc_sockaddr_t **addrsp, isc_uint32_t *countp)
+		    isc_sockaddr_t **addrsp, isc_dscp_t **dscpsp,
+		    isc_uint32_t *countp)
 {
 	int count, i = 0;
 	const cfg_obj_t *addrlist;
-	const cfg_obj_t *portobj;
+	const cfg_obj_t *portobj, *dscpobj;
 	const cfg_listelt_t *element;
 	isc_sockaddr_t *addrs;
 	in_port_t port;
+	isc_dscp_t dscp = -1, *dscps = NULL;
 	isc_result_t result;
 
 	INSIST(addrsp != NULL && *addrsp == NULL);
+	INSIST(dscpsp == NULL || *dscpsp == NULL);
 	INSIST(countp != NULL);
 
 	addrlist = cfg_tuple_get(list, "addresses");
@@ -426,6 +441,23 @@ ns_config_getiplist(const cfg_obj_t *config, const cfg_obj_t *list,
 			return (result);
 	}
 
+	if (dscpsp != NULL) {
+		dscps = isc_mem_get(mctx, count * sizeof(isc_dscp_t));
+		if (dscps == NULL)
+			return (ISC_R_NOMEMORY);
+
+		dscpobj = cfg_tuple_get(list, "dscp");
+		if (dscpobj != NULL && cfg_obj_isuint32(dscpobj)) {
+			if (cfg_obj_asuint32(dscpobj) > 63) {
+				cfg_obj_log(dscpobj, ns_g_lctx, ISC_LOG_ERROR,
+					    "dscp value '%u' is out of range",
+					    cfg_obj_asuint32(dscpobj));
+				return (ISC_R_RANGE);
+			}
+			dscp = (isc_dscp_t)cfg_obj_asuint32(dscpobj);
+		}
+	}
+
 	addrs = isc_mem_get(mctx, count * sizeof(isc_sockaddr_t));
 	if (addrs == NULL)
 		return (ISC_R_NOMEMORY);
@@ -434,8 +466,17 @@ ns_config_getiplist(const cfg_obj_t *config, const cfg_obj_t *list,
 	     element != NULL;
 	     element = cfg_list_next(element), i++)
 	{
+		const cfg_obj_t *addr;
 		INSIST(i < count);
-		addrs[i] = *cfg_obj_assockaddr(cfg_listelt_value(element));
+		addr = cfg_listelt_value(element);
+		addrs[i] = *cfg_obj_assockaddr(addr);
+		if (dscpsp != NULL) {
+			isc_dscp_t innerdscp;
+			innerdscp = cfg_obj_getdscp(addr);
+			if (innerdscp == -1)
+				innerdscp = dscp;
+			dscps[i] = innerdscp;
+		}
 		if (isc_sockaddr_getport(&addrs[i]) == 0)
 			isc_sockaddr_setport(&addrs[i], port);
 	}
@@ -444,17 +485,26 @@ ns_config_getiplist(const cfg_obj_t *config, const cfg_obj_t *list,
 	*addrsp = addrs;
 	*countp = count;
 
+	if (dscpsp != NULL)
+		*dscpsp = dscps;
+
 	return (ISC_R_SUCCESS);
 }
 
 void
 ns_config_putiplist(isc_mem_t *mctx, isc_sockaddr_t **addrsp,
-		    isc_uint32_t count)
+		    isc_dscp_t **dscpsp, isc_uint32_t count)
 {
 	INSIST(addrsp != NULL && *addrsp != NULL);
+	INSIST(dscpsp == NULL || *dscpsp != NULL);
 
 	isc_mem_put(mctx, *addrsp, count * sizeof(isc_sockaddr_t));
 	*addrsp = NULL;
+
+	if (dscpsp != NULL) {
+		isc_mem_put(mctx, *dscpsp, count * sizeof(isc_dscp_t));
+		*dscpsp = NULL;
+	}
 }
 
 static isc_result_t
@@ -488,32 +538,40 @@ get_masters_def(const cfg_obj_t *cctx, const char *name,
 isc_result_t
 ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 			  isc_mem_t *mctx, isc_sockaddr_t **addrsp,
-			  dns_name_t ***keysp, isc_uint32_t *countp)
+			  isc_dscp_t **dscpsp, dns_name_t ***keysp,
+			  isc_uint32_t *countp)
 {
-	isc_uint32_t addrcount = 0, keycount = 0, i = 0;
+	isc_uint32_t addrcount = 0, dscpcount = 0, keycount = 0, i = 0;
 	isc_uint32_t listcount = 0, l = 0, j;
 	isc_uint32_t stackcount = 0, pushed = 0;
 	isc_result_t result;
 	const cfg_listelt_t *element;
 	const cfg_obj_t *addrlist;
 	const cfg_obj_t *portobj;
+	const cfg_obj_t *dscpobj;
 	in_port_t port;
+	isc_dscp_t dscp;
 	dns_fixedname_t fname;
 	isc_sockaddr_t *addrs = NULL;
+	isc_dscp_t *dscps = NULL;
 	dns_name_t **keys = NULL;
 	struct { const char *name; } *lists = NULL;
 	struct {
 		const cfg_listelt_t *element;
 		in_port_t port;
+		isc_dscp_t dscp;
 	} *stack = NULL;
 
 	REQUIRE(addrsp != NULL && *addrsp == NULL);
+	REQUIRE(dscpsp != NULL && *dscpsp == NULL);
 	REQUIRE(keysp != NULL && *keysp == NULL);
 	REQUIRE(countp != NULL);
 
  newlist:
 	addrlist = cfg_tuple_get(list, "addresses");
 	portobj = cfg_tuple_get(list, "port");
+	dscpobj = cfg_tuple_get(list, "dscp");
+
 	if (cfg_obj_isuint32(portobj)) {
 		isc_uint32_t val = cfg_obj_asuint32(portobj);
 		if (val > ISC_UINT16_MAX) {
@@ -525,6 +583,20 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 		port = (in_port_t) val;
 	} else {
 		result = ns_config_getport(config, &port);
+		if (result != ISC_R_SUCCESS)
+			goto cleanup;
+	}
+
+	if (dscpobj != NULL && cfg_obj_isuint32(dscpobj)) {
+		if (cfg_obj_asuint32(dscpobj) > 63) {
+			cfg_obj_log(dscpobj, ns_g_lctx, ISC_LOG_ERROR,
+				    "dscp value '%u' is out of range",
+				    cfg_obj_asuint32(dscpobj));
+			return (ISC_R_RANGE);
+		}
+		dscp = (isc_dscp_t)cfg_obj_asuint32(dscpobj);
+	} else {
+		result = ns_config_getdscp(config, &dscp);
 		if (result != ISC_R_SUCCESS)
 			goto cleanup;
 	}
@@ -609,6 +681,7 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 			 */
 			stack[pushed].element = cfg_list_next(element);
 			stack[pushed].port = port;
+			stack[pushed].dscp = dscp;
 			pushed++;
 			goto newlist;
 		}
@@ -630,6 +703,18 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 			addrs = new;
 			addrcount = newlen;
 
+			newsize = newlen * sizeof(isc_dscp_t);
+			oldsize = dscpcount * sizeof(isc_dscp_t);
+			new = isc_mem_get(mctx, newsize);
+			if (new == NULL)
+				goto cleanup;
+			if (dscpcount != 0) {
+				memcpy(new, dscps, oldsize);
+				isc_mem_put(mctx, dscps, oldsize);
+			}
+			dscps = new;
+			dscpcount = newlen;
+
 			newsize = newlen * sizeof(dns_name_t *);
 			oldsize = keycount * sizeof(dns_name_t *);
 			new = isc_mem_get(mctx, newsize);
@@ -646,18 +731,20 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 		addrs[i] = *cfg_obj_assockaddr(addr);
 		if (isc_sockaddr_getport(&addrs[i]) == 0)
 			isc_sockaddr_setport(&addrs[i], port);
+		dscps[i] = cfg_obj_getdscp(addr);
+		if (dscps[i] == -1)
+			dscps[i] = dscp;
 		keys[i] = NULL;
-		if (!cfg_obj_isstring(key)) {
-			i++;
+		i++;	/* Increment here so that cleanup on error works. */
+		if (!cfg_obj_isstring(key))
 			continue;
-		}
-		keys[i] = isc_mem_get(mctx, sizeof(dns_name_t));
-		if (keys[i] == NULL)
+		keys[i - 1] = isc_mem_get(mctx, sizeof(dns_name_t));
+		if (keys[i - 1] == NULL)
 			goto cleanup;
-		dns_name_init(keys[i], NULL);
+		dns_name_init(keys[i - 1], NULL);
 
 		keystr = cfg_obj_asstring(key);
-		isc_buffer_init(&b, keystr, strlen(keystr));
+		isc_buffer_constinit(&b, keystr, strlen(keystr));
 		isc_buffer_add(&b, strlen(keystr));
 		dns_fixedname_init(&fname);
 		result = dns_name_fromtext(dns_fixedname_name(&fname), &b,
@@ -665,15 +752,15 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 		if (result != ISC_R_SUCCESS)
 			goto cleanup;
 		result = dns_name_dup(dns_fixedname_name(&fname), mctx,
-				      keys[i]);
+				      keys[i - 1]);
 		if (result != ISC_R_SUCCESS)
 			goto cleanup;
-		i++;
 	}
 	if (pushed != 0) {
 		pushed--;
 		element = stack[pushed].element;
 		port = stack[pushed].port;
+		dscp = stack[pushed].dscp;
 		goto resume;
 	}
 	if (i < addrcount) {
@@ -692,6 +779,19 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 		isc_mem_put(mctx, addrs, oldsize);
 		addrs = new;
 		addrcount = i;
+
+		newsize = i * sizeof(isc_dscp_t);
+		oldsize = dscpcount * sizeof(isc_dscp_t);
+		if (i != 0) {
+			new = isc_mem_get(mctx, newsize);
+			if (new == NULL)
+				goto cleanup;
+			memcpy(new, dscps, newsize);
+		} else
+			new = NULL;
+		isc_mem_put(mctx, dscps, oldsize);
+		dscps = new;
+		dscpcount = i;
 
 		newsize = i * sizeof(dns_name_t *);
 		oldsize = keycount * sizeof(dns_name_t *);
@@ -715,6 +815,7 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 	INSIST(keycount == addrcount);
 
 	*addrsp = addrs;
+	*dscpsp = dscps;
 	*keysp = keys;
 	*countp = addrcount;
 
@@ -723,8 +824,10 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
  cleanup:
 	if (addrs != NULL)
 		isc_mem_put(mctx, addrs, addrcount * sizeof(isc_sockaddr_t));
+	if (dscps != NULL)
+		isc_mem_put(mctx, dscps, dscpcount * sizeof(isc_dscp_t));
 	if (keys != NULL) {
-		for (j = 0; j <= i; j++) {
+		for (j = 0; j < i; j++) {
 			if (keys[j] == NULL)
 				continue;
 			if (dns_name_dynamic(keys[j]))
@@ -742,14 +845,21 @@ ns_config_getipandkeylist(const cfg_obj_t *config, const cfg_obj_t *list,
 
 void
 ns_config_putipandkeylist(isc_mem_t *mctx, isc_sockaddr_t **addrsp,
-			  dns_name_t ***keysp, isc_uint32_t count)
+			  isc_dscp_t **dscpsp, dns_name_t ***keysp,
+			  isc_uint32_t count)
 {
 	unsigned int i;
-	dns_name_t **keys = *keysp;
+	dns_name_t **keys;
 
-	INSIST(addrsp != NULL && *addrsp != NULL);
+	REQUIRE(addrsp != NULL && *addrsp != NULL);
+	REQUIRE(dscpsp == NULL || *dscpsp != NULL);
+	REQUIRE(keysp != NULL && *keysp != NULL);
+
+	keys = *keysp;
 
 	isc_mem_put(mctx, *addrsp, count * sizeof(isc_sockaddr_t));
+	if (dscpsp != NULL)
+		isc_mem_put(mctx, *dscpsp, count * sizeof(isc_dscp_t));
 	for (i = 0; i < count; i++) {
 		if (keys[i] == NULL)
 			continue;
@@ -759,6 +869,8 @@ ns_config_putipandkeylist(isc_mem_t *mctx, isc_sockaddr_t **addrsp,
 	}
 	isc_mem_put(mctx, *keysp, count * sizeof(dns_name_t *));
 	*addrsp = NULL;
+	if (dscpsp != NULL)
+		*dscpsp = NULL;
 	*keysp = NULL;
 }
 
@@ -786,6 +898,31 @@ ns_config_getport(const cfg_obj_t *config, in_port_t *portp) {
 		return (ISC_R_RANGE);
 	}
 	*portp = (in_port_t)cfg_obj_asuint32(portobj);
+	return (ISC_R_SUCCESS);
+}
+
+isc_result_t
+ns_config_getdscp(const cfg_obj_t *config, isc_dscp_t *dscpp) {
+	const cfg_obj_t *options = NULL;
+	const cfg_obj_t *dscpobj = NULL;
+	isc_result_t result;
+
+	(void)cfg_map_get(config, "options", &options);
+	if (options == NULL)
+		return (ISC_R_SUCCESS);
+
+	result = cfg_map_get(options, "dscp", &dscpobj);
+	if (result != ISC_R_SUCCESS || dscpobj == NULL) {
+		*dscpp = -1;
+		return (ISC_R_SUCCESS);
+	}
+	if (cfg_obj_asuint32(dscpobj) >= 64) {
+		cfg_obj_log(dscpobj, ns_g_lctx, ISC_LOG_ERROR,
+			    "dscp '%u' out of range",
+			    cfg_obj_asuint32(dscpobj));
+		return (ISC_R_RANGE);
+	}
+	*dscpp = (isc_dscp_t)cfg_obj_asuint32(dscpobj);
 	return (ISC_R_SUCCESS);
 }
 

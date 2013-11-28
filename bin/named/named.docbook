@@ -2,7 +2,7 @@
                "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"
 	       [<!ENTITY mdash "&#8212;">]>
 <!--
- - Copyright (C) 2004-2009, 2011  Internet Systems Consortium, Inc. ("ISC")
+ - Copyright (C) 2004-2009, 2011, 2013  Internet Systems Consortium, Inc. ("ISC")
  - Copyright (C) 2000, 2001, 2003  Internet Software Consortium.
  -
  - Permission to use, copy, modify, and/or distribute this software for any
@@ -44,6 +44,7 @@
       <year>2008</year>
       <year>2009</year>
       <year>2011</year>
+      <year>2013</year>
       <holder>Internet Systems Consortium, Inc. ("ISC")</holder>
     </copyright>
     <copyright>
@@ -61,6 +62,7 @@
       <arg><option>-6</option></arg>
       <arg><option>-c <replaceable class="parameter">config-file</replaceable></option></arg>
       <arg><option>-d <replaceable class="parameter">debug-level</replaceable></option></arg>
+      <arg><option>-D <replaceable class="parameter">string</replaceable></option></arg>
       <arg><option>-E <replaceable class="parameter">engine-name</replaceable></option></arg>
       <arg><option>-f</option></arg>
       <arg><option>-g</option></arg>
@@ -144,6 +146,18 @@
             Set the daemon's debug level to <replaceable class="parameter">debug-level</replaceable>.
             Debugging traces from <command>named</command> become
             more verbose as the debug level increases.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term>-D <replaceable class="parameter">string</replaceable></term>
+        <listitem>
+          <para>
+	    Specifies a string that is used to identify a instance of
+	    <command>named</command> in a process listing.  The contents
+	    of <replaceable class="parameter">string</replaceable> are
+	    not examined.
           </para>
         </listitem>
       </varlistentry>
@@ -290,9 +304,10 @@
             Use <replaceable class="parameter">#listeners</replaceable>
             worker threads to listen for incoming UDP packets on each
             address.  If not specified, <command>named</command> will
-            use all of the worker threads for this purpose; the
-            <option>-U</option> option allows the number to be
-            decreased but not increased.
+            use the number of detected CPUs.  If <option>-n</option>
+            has been set to a higher value than the number of CPUs,
+            then <option>-U</option> may be increased as high as that
+            value, but no higher.
           </para>
         </listitem>
       </varlistentry>

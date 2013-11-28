@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Copyright (C) 2009, 2012  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2009, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -75,7 +75,7 @@ sub updateconfig {
 
    foreach $line (@Lines) {
       if ($havexml) {
-         $line =~ s/^.*#undef USE_PKCS11.*$/define USE_PKCS11 1/;
+         $line =~ s/^.*#undef USE_PKCS11.*$/#define USE_PKCS11 1/;
       } else {
          $line =~ s/^#define USE_PKCS11 .*$/\/\* #undef USE_PKCS11 \*\//;
       }

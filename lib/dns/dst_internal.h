@@ -1,5 +1,5 @@
 /*
- * Portions Copyright (C) 2004-2011  Internet Systems Consortium, Inc. ("ISC")
+ * Portions Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Portions Copyright (C) 2000-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -126,6 +126,9 @@ struct dst_key {
 	isc_boolean_t	timeset[DST_MAX_TIMES + 1];  /*%< data set? */
 	isc_stdtime_t	nums[DST_MAX_NUMERIC + 1];   /*%< numeric metadata */
 	isc_boolean_t	numset[DST_MAX_NUMERIC + 1]; /*%< data set? */
+	isc_boolean_t 	inactive;      /*%< private key not present as it is
+					    inactive */
+	isc_boolean_t 	external;      /*%< external key */
 
 	int		fmt_major;     /*%< private key format, major version */
 	int		fmt_minor;     /*%< private key format, minor version */
@@ -138,6 +141,7 @@ struct dst_context {
 	unsigned int magic;
 	dst_key_t *key;
 	isc_mem_t *mctx;
+	isc_logcategory_t *category;
 	union {
 		void *generic;
 		dst_gssapi_signverifyctx_t *gssctx;
@@ -170,6 +174,8 @@ struct dst_func {
 	 */
 	isc_result_t (*sign)(dst_context_t *dctx, isc_buffer_t *sig);
 	isc_result_t (*verify)(dst_context_t *dctx, const isc_region_t *sig);
+	isc_result_t (*verify2)(dst_context_t *dctx, int maxbits,
+				const isc_region_t *sig);
 	isc_result_t (*computesecret)(const dst_key_t *pub,
 				      const dst_key_t *priv,
 				      isc_buffer_t *secret);
@@ -217,6 +223,9 @@ isc_result_t dst__openssldh_init(struct dst_func **funcp);
 isc_result_t dst__gssapi_init(struct dst_func **funcp);
 #ifdef HAVE_OPENSSL_GOST
 isc_result_t dst__opensslgost_init(struct dst_func **funcp);
+#endif
+#ifdef HAVE_OPENSSL_ECDSA
+isc_result_t dst__opensslecdsa_init(struct dst_func **funcp);
 #endif
 
 /*%

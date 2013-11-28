@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2008-2012  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: dnssec-dsfromkey.c,v 1.24 2011/10/25 01:54:18 marka Exp $ */
+/* $Id: dnssec-dsfromkey.c,v 1.24.114.1 2012/02/07 00:44:12 each Exp $ */
 
 /*! \file */
 
@@ -84,7 +84,7 @@ db_load_from_stream(dns_db_t *db, FILE *fp) {
 	dns_rdatacallbacks_t callbacks;
 
 	dns_rdatacallbacks_init(&callbacks);
-	result = dns_db_beginload(db, &callbacks.add, &callbacks.add_private);
+	result = dns_db_beginload(db, &callbacks);
 	if (result != ISC_R_SUCCESS)
 		fatal("dns_db_beginload failed: %s", isc_result_totext(result));
 
@@ -93,7 +93,7 @@ db_load_from_stream(dns_db_t *db, FILE *fp) {
 	if (result != ISC_R_SUCCESS)
 		fatal("can't load from input: %s", isc_result_totext(result));
 
-	result = dns_db_endload(db, &callbacks.add_private);
+	result = dns_db_endload(db, &callbacks);
 	if (result != ISC_R_SUCCESS)
 		fatal("dns_db_endload failed: %s", isc_result_totext(result));
 }
@@ -284,7 +284,9 @@ emit(unsigned int dtype, isc_boolean_t showall, char *lookaside,
 		}
 	}
 
-	result = dns_rdata_totext(&ds, (dns_name_t *) NULL, &textb);
+	result = dns_rdata_tofmttext(&ds, (dns_name_t *) NULL, 0, 0, 0, "",
+				     &textb);
+
 	if (result != ISC_R_SUCCESS)
 		fatal("can't print rdata");
 
@@ -327,7 +329,7 @@ usage(void) {
 	fprintf(stderr, "    -K <directory>: directory in which to find "
 			"key file or keyset file\n");
 	fprintf(stderr, "    -a algorithm: digest algorithm "
-			"(SHA-1, SHA-256 or GOST)\n");
+			"(SHA-1, SHA-256, GOST or SHA-384)\n");
 	fprintf(stderr, "    -1: use SHA-1\n");
 	fprintf(stderr, "    -2: use SHA-256\n");
 	fprintf(stderr, "    -l: add lookaside zone and print DLV records\n");
@@ -450,6 +452,9 @@ main(int argc, char **argv) {
 		else if (strcasecmp(algname, "GOST") == 0)
 			dtype = DNS_DSDIGEST_GOST;
 #endif
+		else if (strcasecmp(algname, "SHA384") == 0 ||
+			 strcasecmp(algname, "SHA-384") == 0)
+			dtype = DNS_DSDIGEST_SHA384;
 		else
 			fatal("unknown algorithm %s", algname);
 	}

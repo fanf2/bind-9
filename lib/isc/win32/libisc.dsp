@@ -223,6 +223,10 @@ SOURCE=..\include\isc\base64.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\include\isc\bind9.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\include\isc\bind_registry.h
 # End Source File
 # Begin Source File
@@ -256,6 +260,10 @@ SOURCE=.\include\isc\condition.h
 # Begin Source File
 
 SOURCE=..\..\..\config.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\include\isc\crc64.h
 # End Source File
 # Begin Source File
 
@@ -463,6 +471,10 @@ SOURCE=..\include\isc\refcount.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\include\isc\regex.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\include\isc\region.h
 # End Source File
 # Begin Source File
@@ -480,6 +492,10 @@ SOURCE=..\include\isc\resultclass.h
 # Begin Source File
 
 SOURCE=..\include\isc\rwlock.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\include\isc\safe.h
 # End Source File
 # Begin Source File
 
@@ -603,6 +619,10 @@ SOURCE=..\base64.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\bind9.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\bitstring.c
 # End Source File
 # Begin Source File
@@ -616,6 +636,10 @@ SOURCE=..\bufferlist.c
 # Begin Source File
 
 SOURCE=..\commandline.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\crc64.c
 # End Source File
 # Begin Source File
 
@@ -711,6 +735,10 @@ SOURCE=..\parseint.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\pool.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\portset.c
 # End Source File
 # Begin Source File
@@ -735,6 +763,10 @@ SOURCE=..\refcount.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\regex.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\region.c
 # End Source File
 # Begin Source File
@@ -744,6 +776,10 @@ SOURCE=..\result.c
 # Begin Source File
 
 SOURCE=..\rwlock.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\safe.c
 # End Source File
 # Begin Source File
 
