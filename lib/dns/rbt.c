@@ -1680,6 +1680,8 @@ dns_rbt_findnode(dns_rbt_t *rbt, dns_name_t *name, dns_name_t *foundname,
 			       ((options & DNS_RBTFIND_EMPTYDATA) == 0 &&
 				DATA(current) == NULL));
 			chain->end = current;
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf rbt spong");
 
 		} else if ((options & DNS_RBTFIND_NOPREDECESSOR) != 0) {
 			/*

@@ -1194,6 +1194,14 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 	dns_rdataset_t zrdataset, zsigrdataset;
 	dns_fixedname_t zfixedname;
 
+char domainbuf[DNS_NAME_FORMATSIZE];
+dns_name_format(name, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: findzonecut name %s", domainbuf);
+dns_name_format(fname, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: findzonecut fname %s", domainbuf);
+
 	REQUIRE(DNS_VIEW_VALID(view));
 	REQUIRE(view->frozen);
 
@@ -1214,7 +1222,7 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 	 */
 	zone = NULL;
 	LOCK(&view->lock);
-	if (view->zonetable != NULL)
+	if (view->zonetable != NULL && (options & DNS_DBFIND_NOEXACT) == 0)
 		result = dns_zt_find(view->zonetable, name, 0, NULL, &zone);
 	else
 		result = ISC_R_NOTFOUND;
@@ -1222,17 +1230,23 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 	if (result == ISC_R_SUCCESS || result == DNS_R_PARTIALMATCH)
 		result = dns_zone_getdb(zone, &db);
 	if (result == ISC_R_NOTFOUND) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut notfound");
 		/*
 		 * We're not directly authoritative for this query name, nor
 		 * is it a subdomain of any zone for which we're
 		 * authoritative.
 		 */
 		if (use_cache && view->cachedb != NULL) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut cache");
 			/*
 			 * We have a cache; try it.
 			 */
 			dns_db_attach(view->cachedb, &db);
 		} else {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut hints");
 			/*
 			 * Maybe we have hints...
 			 */
@@ -1252,13 +1266,20 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 	 * Look for the zonecut.
 	 */
 	if (!is_cache) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut db_find");
 		result = dns_db_find(db, name, NULL, dns_rdatatype_ns, options,
 				     now, NULL, fname, rdataset, sigrdataset);
 		if (result == DNS_R_DELEGATION)
 			result = ISC_R_SUCCESS;
 		else if (result != ISC_R_SUCCESS)
 			goto cleanup;
+dns_name_format(fname, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: findzonecut fname %s", domainbuf);
 		if (use_cache && view->cachedb != NULL && db != view->hints) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut cache may be better");
 			/*
 			 * We found an answer, but the cache may be better.
 			 */
@@ -1266,6 +1287,9 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 			result = dns_name_copy(fname, zfname, NULL);
 			if (result != ISC_R_SUCCESS)
 				goto cleanup;
+dns_name_format(zfname, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: findzonecut zfname %s", domainbuf);
 			dns_rdataset_clone(rdataset, &zrdataset);
 			dns_rdataset_disassociate(rdataset);
 			if (sigrdataset != NULL &&
@@ -1279,10 +1303,15 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 			goto db_find;
 		}
 	} else {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut db_findzonecut");
 		result = dns_db_findzonecut(db, name, options, now, NULL,
 					    fname, rdataset, sigrdataset);
 		if (result == ISC_R_SUCCESS) {
-			if (zfname != NULL &&
+dns_name_format(fname, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: findzonecut fname %s", domainbuf);
+			if (zfname != NULL && (options & DNS_DBFIND_NOEXACT) == 0 &&
 			    (!dns_name_issubdomain(fname, zfname) ||
 			     (dns_zone_staticstub &&
 			      dns_name_equal(fname, zfname)))) {
@@ -1291,6 +1320,8 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 				 * zone delegation is better.
 				 */
 				use_zone = ISC_TRUE;
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut our zone delegation is better");
 			}
 		} else if (result == ISC_R_NOTFOUND) {
 			if (zfname != NULL) {
@@ -1299,11 +1330,15 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 				 * have a zone delegation, so use it.
 				 */
 				use_zone = ISC_TRUE;
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut we had a zone delegation so use it");
 			} else {
 				/*
 				 * Maybe we have hints...
 				 */
 				try_hints = ISC_TRUE;
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut hints 2");
 			}
 		} else {
 			/*
@@ -1315,6 +1350,8 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 
  finish:
 	if (use_zone) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut use zone");
 		if (dns_rdataset_isassociated(rdataset)) {
 			dns_rdataset_disassociate(rdataset);
 			if (sigrdataset != NULL &&
@@ -1329,6 +1366,8 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 		    dns_rdataset_isassociated(&zrdataset))
 			dns_rdataset_clone(&zsigrdataset, sigrdataset);
 	} else if (try_hints && use_hints && view->hints != NULL) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut use hints");
 		/*
 		 * We've found nothing so far, but we have hints.
 		 */

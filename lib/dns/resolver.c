@@ -2834,6 +2834,7 @@ fctx_getaddresses(fetchctx_t *fctx, isc_boolean_t badcache) {
 	     result == ISC_R_SUCCESS;
 	     result = dns_rdataset_next(&fctx->nameservers))
 	{
+char domainbuf[DNS_NAME_FORMATSIZE];
 		dns_rdataset_current(&fctx->nameservers, &rdata);
 		/*
 		 * Extract the name from the NS record.
@@ -2844,6 +2845,10 @@ fctx_getaddresses(fetchctx_t *fctx, isc_boolean_t badcache) {
 
 		findname(fctx, &ns.name, 0, stdoptions, 0, now,
 			 &need_alternate);
+dns_name_format(&ns.name, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: %s", domainbuf);
+
 		dns_rdata_reset(&rdata);
 		dns_rdata_freestruct(&ns);
 	}
@@ -3044,6 +3049,9 @@ fctx_nextaddress(fetchctx_t *fctx) {
 			find = ISC_LIST_HEAD(fctx->finds);
 	}
 
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf find: %p", find);
+
 	/*
 	 * Find the first unmarked addrinfo.
 	 */
@@ -3070,6 +3078,9 @@ fctx_nextaddress(fetchctx_t *fctx) {
 		} while (find != start);
 	}
 
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf addrinfo: %p", addrinfo);
+
 	fctx->find = find;
 	if (addrinfo != NULL)
 		return (addrinfo);
@@ -3088,6 +3099,9 @@ fctx_nextaddress(fetchctx_t *fctx) {
 		if (find == NULL)
 			find = ISC_LIST_HEAD(fctx->altfinds);
 	}
+
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf altfind: %p", find);
 
 	/*
 	 * Find the first unmarked addrinfo.
@@ -3115,6 +3129,9 @@ fctx_nextaddress(fetchctx_t *fctx) {
 		} while (find != start);
 	}
 
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf addrinfo: %p", addrinfo);
+
 	faddrinfo = addrinfo;
 
 	/*
@@ -3136,6 +3153,9 @@ fctx_nextaddress(fetchctx_t *fctx) {
 			break;
 		}
 	}
+
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf altaddr: %p", addrinfo);
 
 	if (addrinfo == NULL) {
 		addrinfo = faddrinfo;
@@ -3164,6 +3184,8 @@ fctx_try(fetchctx_t *fctx, isc_boolean_t retrying, isc_boolean_t badcache) {
 		fctx_cleanupaltfinds(fctx);
 		fctx_cleanupforwaddrs(fctx);
 		fctx_cleanupaltaddrs(fctx);
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: start over");
 		result = fctx_getaddresses(fctx, badcache);
 		if (result == DNS_R_WAIT) {
 			/*
@@ -3720,6 +3742,7 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 		dns_forwarders_t *forwarders = NULL;
 		unsigned int labels;
 		dns_name_t *fwdname = name;
+char domainbuf[DNS_NAME_FORMATSIZE];
 
 		/*
 		 * DS records are found in the parent server.
@@ -3727,15 +3750,23 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 		 */
 		if (dns_rdatatype_atparent(fctx->type) &&
 		    dns_name_countlabels(name) > 1) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf ds at parent");
 			dns_name_init(&suffix, NULL);
 			labels = dns_name_countlabels(name);
 			dns_name_getlabelsequence(name, 1, labels - 1, &suffix);
 			fwdname = &suffix;
 		}
+dns_name_format(fwdname, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: fwdname %s", domainbuf);
 		dns_fixedname_init(&fixed);
 		domain = dns_fixedname_name(&fixed);
 		result = dns_fwdtable_find2(fctx->res->view->fwdtable, fwdname,
 					    domain, &forwarders);
+dns_name_format(domain, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: domain %s", domainbuf);
 		if (result == ISC_R_SUCCESS)
 			fctx->fwdpolicy = forwarders->fwdpolicy;
 
@@ -3745,12 +3776,20 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 			 * nameservers, and we're not in forward-only mode,
 			 * so find the best nameservers to use.
 			 */
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut");
 			if (dns_rdatatype_atparent(fctx->type))
 				findoptions |= DNS_DBFIND_NOEXACT;
 			result = dns_view_findzonecut(res->view, name, domain,
 						      0, findoptions, ISC_TRUE,
 						      &fctx->nameservers,
 						      NULL);
+dns_name_format(name, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: name %s", domainbuf);
+dns_name_format(domain, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: domain %s", domainbuf);
 			if (result != ISC_R_SUCCESS)
 				goto cleanup_name;
 			result = dns_name_dup(domain, mctx, &fctx->domain);
@@ -3758,9 +3797,14 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 				dns_rdataset_disassociate(&fctx->nameservers);
 				goto cleanup_name;
 			}
+dns_name_format(domain, domainbuf, sizeof(domainbuf));
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf: domain %s", domainbuf);
 			fctx->ns_ttl = fctx->nameservers.ttl;
 			fctx->ns_ttl_ok = ISC_TRUE;
 		} else {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf forwardonly");
 			/*
 			 * We're in forward-only mode.  Set the query domain.
 			 */
