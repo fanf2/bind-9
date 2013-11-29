@@ -1190,7 +1190,7 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
 	dns_db_t *db;
 	isc_boolean_t is_cache, use_zone, try_hints;
 	dns_zone_t *zone;
-	dns_name_t *zfname;
+	dns_name_t suffix, *zname, *zfname;
 	dns_rdataset_t zrdataset, zsigrdataset;
 	dns_fixedname_t zfixedname;
 
@@ -1218,12 +1218,29 @@ isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LO
 	dns_rdataset_init(&zsigrdataset);
 
 	/*
+	 * DS records are found in the parent zone.
+	 * Strip label to get the correct zone (if any).
+	 */
+	if ((options & DNS_DBFIND_NOEXACT) != 0 && 
+	    dns_name_countlabels(name) > 1) {
+isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
+    "fanf findzonecut ds at parent");
+		unsigned int labels;
+		dns_name_init(&suffix, NULL);
+		labels = dns_name_countlabels(name);
+		dns_name_getlabelsequence(name, 1, labels - 1, &suffix);
+		zname = &suffix;
+	} else {
+		zname = name;
+	}
+
+	/*
 	 * Find the right database.
 	 */
 	zone = NULL;
 	LOCK(&view->lock);
-	if (view->zonetable != NULL && (options & DNS_DBFIND_NOEXACT) == 0)
-		result = dns_zt_find(view->zonetable, name, 0, NULL, &zone);
+	if (view->zonetable != NULL)
+		result = dns_zt_find(view->zonetable, zname, 0, NULL, &zone);
 	else
 		result = ISC_R_NOTFOUND;
 	UNLOCK(&view->lock);
@@ -1268,7 +1285,7 @@ isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LO
 	if (!is_cache) {
 isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
     "fanf findzonecut db_find");
-		result = dns_db_find(db, name, NULL, dns_rdatatype_ns, options,
+		result = dns_db_find(db, zname, NULL, dns_rdatatype_ns, options,
 				     now, NULL, fname, rdataset, sigrdataset);
 		if (result == DNS_R_DELEGATION)
 			result = ISC_R_SUCCESS;
@@ -1311,7 +1328,7 @@ isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LO
 dns_name_format(fname, domainbuf, sizeof(domainbuf));
 isc_log_write(dns_lctx, DNS_LOGCATEGORY_RESOLVER, DNS_LOGMODULE_RESOLVER, ISC_LOG_DEBUG(3),
     "fanf: findzonecut fname %s", domainbuf);
-			if (zfname != NULL && (options & DNS_DBFIND_NOEXACT) == 0 &&
+			if (zfname != NULL &&
 			    (!dns_name_issubdomain(fname, zfname) ||
 			     (dns_zone_staticstub &&
 			      dns_name_equal(fname, zfname)))) {
