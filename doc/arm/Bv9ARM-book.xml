@@ -18,7 +18,7 @@
  - PERFORMANCE OF THIS SOFTWARE.
 -->
 
-<!-- File: $Id$ -->
+<!-- File: $Id: Bv9ARM-book.xml,v 1.522 2012/01/31 03:35:40 each Exp $ -->
 <book xmlns:xi="http://www.w3.org/2001/XInclude">
   <title>BIND 9 Administrator Reference Manual</title>
 
@@ -1204,8 +1204,14 @@ zone "eng.example.com" {
                   <command>algorithm</command> and <command>secret</command>.
                   While the configuration parser will accept any string as the
                   argument
-                  to algorithm, currently only the string "<userinput>hmac-md5</userinput>"
-                  has any meaning.  The secret is a base-64 encoded string
+                  to algorithm, currently only the strings
+                  "<userinput>hmac-md5</userinput>",
+                  "<userinput>hmac-sha1</userinput>",
+                  "<userinput>hmac-sha224</userinput>",
+                  "<userinput>hmac-sha256</userinput>",
+                  "<userinput>hmac-sha384</userinput>"
+                  and "<userinput>hmac-sha512</userinput>"
+                  have any meaning.  The secret is a base-64 encoded string
 		  as specified in RFC 3548.
                 </para>
 
@@ -1232,7 +1238,7 @@ zone "eng.example.com" {
 
 <programlisting>
 key rndc_key {
-     algorithm "hmac-md5";
+     algorithm "hmac-sha256";
      secret
        "c3Ryb25nIGVub3VnaCBmb3IgYSBtYW4gYnV0IG1hZGUgZm9yIGEgd29tYW4K";
 };
@@ -2384,6 +2390,8 @@ options {
 
     <xi:include href="pkcs11.xml"/>
 
+    <xi:include href="dlz.xml"/>
+
     <sect1>
       <title>IPv6 Support in <acronym>BIND</acronym> 9</title>
 
@@ -2722,6 +2730,21 @@ $ORIGIN 0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.
             <row rowsep="0">
               <entry colname="1">
                 <para>
+                  <varname>ip_dscp</varname>
+                </para>
+              </entry>
+              <entry colname="2">
+                <para>
+                  A <varname>number</varname> between 0 and 63, used
+                  to select a differentiated services code point (DSCP)
+                  value for use with outgoing traffic on operating systems
+                  that support DSCP.
+                </para>
+              </entry>
+            </row>
+            <row rowsep="0">
+              <entry colname="1">
+                <para>
                   <varname>ip_port</varname>
                 </para>
               </entry>
@@ -2861,12 +2884,14 @@ $ORIGIN 0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.
                 <para>
                   Integers may take values
                   0 &lt;= value &lt;= 18446744073709551615, though
-                  certain parameters may use a more limited range
-                  within these extremes.  In most cases, setting a
-                  value to 0 does not literally mean zero; it means
-                  "undefined" or "as big as psosible", depending on
-                  the context. See the expalantions of particular
-                  parameters that use <varname>size_spec</varname>
+                  certain parameters
+                  (such as <command>max-journal-size</command>) may
+                  use a more limited range within these extremes.
+                  In most cases, setting a value to 0 does not
+                  literally mean zero; it means "undefined" or
+                  "as big as possible", depending on the context.
+                  See the expalantions of particular parameters
+                  that use <varname>size_spec</varname>
                   for details on how they interpret its use. 
                 </para>
                 <para>
@@ -2882,13 +2907,8 @@ $ORIGIN 0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.
                 </para>
 		<para>
                   <varname>unlimited</varname> generally means
-                  "as big as possible", though in certain contexts,
-                  (including <option>max-cache-size</option>), it may
-                  mean the largest possible 32-bit unsigned integer
-                  (0xffffffff); this distinction can be important when
-                  dealing with larger quantities. 
-                  <varname>unlimited</varname> is usually the best way
-                  to safely set a very large number.
+                  "as big as possible", and is usually the best
+                  way to safely set a very large number.
                 </para>
 		<para>
                   <varname>default</varname> 
@@ -3405,6 +3425,62 @@ $ORIGIN 0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.
           </tgroup>
         </informaltable>
 
+        <para>
+          When <acronym>BIND</acronym> 9 is built with GeoIP support,
+          ACLs can also be used for geographic access restrictions.
+          This is done by specifying an ACL element of the form:
+          <command>geoip <optional>db <replaceable>database</replaceable></optional> <replaceable>field</replaceable> <replaceable>value</replaceable></command>
+        </para>
+        <para>
+          The <replaceable>field</replaceable> indicates which field
+          to search for a match.  Available fields are "country",
+          "region", "city", "continent", "postal" (postal code),
+          "metro" (metro code), "area" (area code), "tz" (timezone),
+          "isp", "org", "asnum", "domain" and "netspeed".
+        </para>
+        <para>
+          <replaceable>value</replaceable> is the value to searched for
+          within the database.  A string may be quoted if it contains
+          spaces or other special characters.  If this is a "country"
+          search and the string is two characters long, then it must be a
+          standard ISO-3166-1 two-letter country code, and if it is three
+          characters long then it must be an ISO-3166-1 three-letter
+          country code; otherwise it is the full name of the country.
+          Similarly, if this is a "region" search and the string is
+          two characters long, then it must be a standard two-letter state
+          or province abbreviation; otherwise it is the full name of the
+          state or province.
+        </para>
+        <para>
+          The <replaceable>database</replaceable> field indicates which
+          GeoIP database to search for a match.  In most cases this is
+          unnecessary, because most search fields can only be found in
+          a single database.  However, searches for country can be
+          answered from the "city", "region", or "country" databases,
+          and searches for region (i.e., state or province) can be
+          answered from the "city" or "region" databases.  For these
+          search types, specifying a <replaceable>database</replaceable>
+          will force the query to be answered from that database and no
+          other.  If <replaceable>database</replaceable> is not
+          specified, then these queries will be answered from the "city",
+          database if it is installed, or the "region" database if it is
+          installed, or the "country" database, in that order.
+        </para>
+        <para>
+          Some example GeoIP ACLs:
+        </para>
+        <programlisting>geoip country US;
+geoip country JAP;
+geoip db country country Canada;
+geoip db region region WA;
+geoip city "San Francisco";
+geoip region Oklahoma;
+geoip postal 95062;
+geoip tz "America/Los_Angeles";
+geoip org "Internet Systems Consortium";
+</programlisting>
+
+
       </sect2>
       <sect2>
         <title><command>controls</command> Statement Grammar</title>
@@ -3792,6 +3868,9 @@ $ORIGIN 0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.
             page. If you have a system which uses a very old version of <command>syslog</command> that
             only uses two arguments to the <command>openlog()</command> function,
             then this clause is silently ignored.
+          </para>
+          <para>
+	    On Windows machines syslog messages are directed to the EventViewer.
           </para>
           <para>
             The <command>severity</command> clause works like <command>syslog</command>'s
@@ -4294,11 +4373,6 @@ category notify { null; };
                   </entry>
 		  <entry colname="2">
 		    <para>
-                      (Only available when <acronym>BIND</acronym> 9 is
-                      configured with the <userinput>--enable-rrl</userinput>
-                      option at compile time.)
-                    </para>
-		    <para>
 		      The start, periodic, and final notices of the
 		      rate limiting of a stream of responses are logged at
 		      <command>info</command> severity in this category.
@@ -4560,8 +4634,8 @@ badresp:1,adberr:0,findfail:0,valfail:0]
         </para>
 
 <programlisting><command>lwres</command> {
-    <optional> listen-on { <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ;
-                <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ; ... </optional> }; </optional>
+    <optional> listen-on { <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ;
+    <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; ... </optional> }; </optional>
     <optional> view <replaceable>view_name</replaceable>; </optional>
     <optional> search { <replaceable>domain_name</replaceable> ; <optional> <replaceable>domain_name</replaceable> ; ... </optional> }; </optional>
     <optional> ndots <replaceable>number</replaceable>; </optional>
@@ -4628,7 +4702,7 @@ badresp:1,adberr:0,findfail:0,valfail:0]
         <title><command>masters</command> Statement Grammar</title>
 
 <programlisting>
-<command>masters</command> <replaceable>name</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> { ( <replaceable>masters_list</replaceable> | 
+<command>masters</command> <replaceable>name</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> { ( <replaceable>masters_list</replaceable> | 
       <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>key <replaceable>key</replaceable></optional> ) ; <optional>...</optional> };
 </programlisting>
 
@@ -4704,10 +4778,10 @@ badresp:1,adberr:0,findfail:0,valfail:0]
     <optional> dnssec-must-be-secure <replaceable>domain yes_or_no</replaceable>; </optional>
     <optional> dnssec-accept-expired <replaceable>yes_or_no</replaceable>; </optional>
     <optional> forward ( <replaceable>only</replaceable> | <replaceable>first</replaceable> ); </optional>
-    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ; ... </optional> }; </optional>
-    <optional> dual-stack-servers <optional>port <replaceable>ip_port</replaceable></optional> {
-        ( <replaceable>domain_name</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> |
-          <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ) ; 
+    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; ... </optional> }; </optional>
+    <optional> dual-stack-servers <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> {
+        ( <replaceable>domain_name</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> |
+          <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional>) ; 
         ... }; </optional>
     <optional> check-names ( <replaceable>master</replaceable> | <replaceable>slave</replaceable> | <replaceable>response</replaceable> )
         ( <replaceable>warn</replaceable> | <replaceable>fail</replaceable> | <replaceable>ignore</replaceable> ); </optional>
@@ -4742,16 +4816,21 @@ badresp:1,adberr:0,findfail:0,valfail:0]
     <optional> avoid-v4-udp-ports { <replaceable>port_list</replaceable> }; </optional>
     <optional> use-v6-udp-ports { <replaceable>port_list</replaceable> }; </optional>
     <optional> avoid-v6-udp-ports { <replaceable>port_list</replaceable> }; </optional>
-    <optional> listen-on <optional> port <replaceable>ip_port</replaceable> </optional> { <replaceable>address_match_list</replaceable> }; </optional>
-    <optional> listen-on-v6 <optional> port <replaceable>ip_port</replaceable> </optional> { <replaceable>address_match_list</replaceable> }; </optional>
+    <optional> listen-on <optional> port <replaceable>ip_port</replaceable> </optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> { <replaceable>address_match_list</replaceable> }; </optional>
+    <optional> listen-on-v6 <optional> port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional>
+{ <replaceable>address_match_list</replaceable> }; </optional>
     <optional> query-source ( ( <replaceable>ip4_addr</replaceable> | <replaceable>*</replaceable> )
-        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> |
+        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional>
+        <optional> dscp <replaceable>ip_dscp</replaceable></optional> |
         <optional> address ( <replaceable>ip4_addr</replaceable> | <replaceable>*</replaceable> ) </optional>
-        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> ) ; </optional>
+        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> )
+        <optional> dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> query-source-v6 ( ( <replaceable>ip6_addr</replaceable> | <replaceable>*</replaceable> )
-        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> | 
+        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional>
+        <optional> dscp <replaceable>ip_dscp</replaceable></optional> |
         <optional> address ( <replaceable>ip6_addr</replaceable> | <replaceable>*</replaceable> ) </optional> 
-        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> ) ; </optional>
+        <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> )
+        <optional> dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> use-queryport-pool <replaceable>yes_or_no</replaceable>; </optional>
     <optional> queryport-pool-ports <replaceable>number</replaceable>; </optional>
     <optional> queryport-pool-updateinterval <replaceable>number</replaceable>; </optional>
@@ -4769,19 +4848,18 @@ badresp:1,adberr:0,findfail:0,valfail:0]
     <optional> transfers-in  <replaceable>number</replaceable>; </optional>
     <optional> transfers-out <replaceable>number</replaceable>; </optional>
     <optional> transfers-per-ns <replaceable>number</replaceable>; </optional>
-    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> alt-transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> alt-transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>)
-                             <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> alt-transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> alt-transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> use-alt-transfer-source <replaceable>yes_or_no</replaceable>; </optional>
     <optional> notify-delay <replaceable>seconds</replaceable> ; </optional>
-    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> notify-to-soa <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> also-notify { <replaceable>ip_addr</replaceable>
-                    <optional>port <replaceable>ip_port</replaceable></optional> <optional>key <replaceable>keyname</replaceable></optional> ;
-                    <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>key <replaceable>keyname</replaceable></optional> ; ... </optional> }; </optional>
+                    <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> <optional>key <replaceable>keyname</replaceable></optional> ;
+                    <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> <optional>key <replaceable>keyname</replaceable></optional> ; ... </optional> }; </optional>
     <optional> max-ixfr-log-size <replaceable>number</replaceable>; </optional>
     <optional> max-journal-size <replaceable>size_spec</replaceable>; </optional>
     <optional> coresize <replaceable>size_spec</replaceable> ; </optional>
@@ -4812,12 +4890,14 @@ badresp:1,adberr:0,findfail:0,valfail:0]
     <optional> min-retry-time <replaceable>number</replaceable> ; </optional>
     <optional> max-retry-time <replaceable>number</replaceable> ; </optional>
     <optional> port <replaceable>ip_port</replaceable>; </optional>
+    <optional> dscp <replaceable>ip_dscp</replaceable></optional> ;
     <optional> additional-from-auth <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> additional-from-cache <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> random-device <replaceable>path_name</replaceable> ; </optional>
     <optional> max-cache-size <replaceable>size_spec</replaceable> ; </optional>
     <optional> match-mapped-addresses <replaceable>yes_or_no</replaceable>; </optional>
     <optional> filter-aaaa-on-v4 ( <replaceable>yes_or_no</replaceable> | <replaceable>break-dnssec</replaceable> ); </optional>
+    <optional> filter-aaaa-on-v6 ( <replaceable>yes_or_no</replaceable> | <replaceable>break-dnssec</replaceable> ); </optional>
     <optional> filter-aaaa { <replaceable>address_match_list</replaceable> }; </optional>
     <optional> dns64 <replaceable>ipv6-prefix</replaceable> {
 	<optional> clients { <replaceable>address_match_list</replaceable> }; </optional>
@@ -4837,12 +4917,15 @@ badresp:1,adberr:0,findfail:0,valfail:0]
     <optional> querylog <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> disable-algorithms <replaceable>domain</replaceable> { <replaceable>algorithm</replaceable>;
                                 <optional> <replaceable>algorithm</replaceable>; </optional> }; </optional>
+    <optional> disable-ds-digests <replaceable>domain</replaceable> { <replaceable>digest_type</replaceable>;
+                                <optional> <replaceable>digest_type</replaceable>; </optional> }; </optional>
     <optional> acache-enable <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> acache-cleaning-interval <replaceable>number</replaceable>; </optional>
     <optional> max-acache-size <replaceable>size_spec</replaceable> ; </optional>
     <optional> clients-per-query <replaceable>number</replaceable> ; </optional>
     <optional> max-clients-per-query <replaceable>number</replaceable> ; </optional>
-    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>) ; </optional>
+    <optional> masterfile-format
+            (<constant>text</constant>|<constant>raw</constant>|<constant>map</constant>) ; </optional>
     <optional> empty-server <replaceable>name</replaceable> ; </optional>
     <optional> empty-contact <replaceable>name</replaceable> ; </optional>
     <optional> empty-zones-enable <replaceable>yes_or_no</replaceable> ; </optional>
@@ -4870,10 +4953,11 @@ badresp:1,adberr:0,findfail:0,valfail:0]
 	<optional> min-table-size <replaceable>number</replaceable> ; </optional>
       } ; </optional>
     <optional> response-policy { <replaceable>zone_name</replaceable>
-	<optional> policy given | disabled | passthru | nxdomain | nodata | cname <replaceable>domain</replaceable> </optional>
+	<optional> policy given | disabled | passthru | drop | nxdomain | nodata | cname <replaceable>domain</replaceable> </optional>
 	<optional> recursive-only <replaceable>yes_or_no</replaceable> </optional> <optional> max-policy-ttl <replaceable>number</replaceable> </optional> ;
     } <optional> recursive-only <replaceable>yes_or_no</replaceable> </optional> <optional> max-policy-ttl <replaceable>number</replaceable> </optional>
-	<optional> break-dnssec <replaceable>yes_or_no</replaceable> </optional> <optional> min-ns-dots <replaceable>number</replaceable> </optional> ; </optional>
+	<optional> break-dnssec <replaceable>yes_or_no</replaceable> </optional> <optional> min-ns-dots <replaceable>number</replaceable> </optional>
+	<optional> qname-wait-recurse <replaceable>yes_or_no</replaceable> </optional> ; </optional>
 };
 </programlisting>
 
@@ -5384,8 +5468,33 @@ options {
                 specified name.
                 Multiple <command>disable-algorithms</command>
                 statements are allowed.
-                Only the most specific will be applied.
+                Only the best match <command>disable-algorithms</command>
+		clause will be used to determine which algorithms are used.
               </para>
+              <para>
+		If all supported algorithms are disabled, the zones covered
+		by the <command>disable-algorithms</command> will be treated
+		as insecure.
+              </para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term><command>disable-ds-digests</command></term>
+            <listitem>
+              <para>
+                Disable the specified DS/DLV digest types at and below the
+                specified name.
+                Multiple <command>disable-ds-digests</command>
+                statements are allowed.
+                Only the best match <command>disable-ds-digests</command>
+		clause will be used to determine which digest types are used.
+              </para>
+	      <para>
+		If all supported digest types are disabled, the zones covered
+		by the <command>disable-ds-digests</command> will be treated
+		as insecure.
+	      </para>
             </listitem>
           </varlistentry>
 
@@ -5574,7 +5683,7 @@ options {
                   <command>named</command>.  (A planned third option,
                   <literal>external</literal>, will disable all automatic
                   signing and allow DNSSEC data to be submitted into a zone
-                  via dyanmic update; this is not yet implemented.)
+                  via dynamic update; this is not yet implemented.)
 		</para>
 	    </listitem>
 	  </varlistentry>
@@ -5606,9 +5715,12 @@ options {
                 For backward compatibility with earlier versions
                 of BIND 9, the <command>zone-statistics</command>
                 option can also accept <userinput>yes</userinput>
-                or <userinput>no</userinput>, which have the same
-                effect as <userinput>full</userinput> and
-                <userinput>terse</userinput>, respectively.
+                or <userinput>no</userinput>; <userinput>yes</userinput>
+                has the same meaning as <userinput>full</userinput>.
+                As of <acronym>BIND</acronym> 9.10, 
+                <userinput>no</userinput> has the same meaning
+                as <userinput>none</userinput>; previously, it
+                was the same as <userinput>terse</userinput>.
               </para>
             </listitem>
           </varlistentry>
@@ -6315,7 +6427,7 @@ options {
                 </para>
                 <para>
                   If <userinput>break-dnssec</userinput>,
-                  then AAAA records are deleted even when dnssec is enabled.
+                  then AAAA records are deleted even when DNSSEC is enabled.
                   As suggested by the name, this makes the response not verify,
                   because the DNSSEC protocol is designed detect deletions.
                 </para>
@@ -6338,6 +6450,18 @@ options {
 		  Some AAAA records are given to IPv4 clients in glue records.
 		  IPv4 clients that are servers can then erroneously
 		  answer requests for AAAA records received via IPv4.
+                </para>
+              </listitem>
+            </varlistentry>
+
+            <varlistentry>
+              <term><command>filter-aaaa-on-v6</command></term>
+              <listitem>
+                <para>
+                  Identical to <command>filter-aaaa-on-v4</command>,
+                  except it filters AAAA responses to queries from IPv6
+                  clients instead of IPv4 clients.  To filter all
+                  responses, set both options to <userinput>yes</userinput>.
                 </para>
               </listitem>
             </varlistentry>
@@ -6678,7 +6802,7 @@ options {
                   (see <xref linkend="man.dnssec-keygen"/> and
                   <xref linkend="man.dnssec-settime"/>).  The
                   <command>dnssec-loadkeys-interval</command> option
-                  sets the frequency of autoatic repository checks, in
+                  sets the frequency of automatic repository checks, in
                   minutes.  The default is <literal>60</literal> (1 hour),
                   the minimum is <literal>1</literal> (1 minute), and the
                   maximum is <literal>1440</literal> (24 hours); any higher
@@ -7104,8 +7228,8 @@ listen-on port 1234 { !1.2.3.4; 1.2/16; };
           <para>
             The <command>listen-on-v6</command> option is used to
             specify the interfaces and the ports on which the server will
-            listen
-            for incoming queries sent using IPv6.
+            listen for incoming queries sent using IPv6.  If not specified,
+            the server will listen on port 53 on all IPv6 interfaces.
           </para>
 
           <para>
@@ -7154,13 +7278,6 @@ listen-on-v6 port 1234 { !2001:db8::/32; any; };
 <programlisting>listen-on-v6 { none; };
 </programlisting>
 
-          <para>
-            If no <command>listen-on-v6</command> option is
-            specified, the server will not listen on any IPv6 address
-	    unless <command>-6</command> is specified when <command>named</command> is
-	    invoked.  If <command>-6</command> is specified then
-	    <command>named</command> will listen on port 53 on all IPv6 interfaces by default.
-          </para>
         </sect3>
 
         <sect3 id="query_address">
@@ -7890,22 +8007,18 @@ avoid-v6-udp-ports { 40000; range 50000 60000; };
                   The maximum amount of memory to use for the
                   server's cache, in bytes.
                   When the amount of data in the cache
-                  reaches this limit, the server will cause records to expire
-                  prematurely based on an LRU based strategy so that
-                  the limit is not exceeded.
-                  A value of 0 is special, meaning that
-                  records are purged from the cache only when their
+                  reaches this limit, the server will cause records to
+                  expire prematurely based on an LRU based strategy so
+                  that the limit is not exceeded.
+                  The keyword <userinput>unlimited</userinput>,
+                  or the value 0, will place no limit on cache size;
+                  records will be purged from the cache only when their
                   TTLs expire.
-                  Another special keyword <userinput>unlimited</userinput>
-                  means the maximum value of 32-bit unsigned integers
-                  (0xffffffff), which may not have the same effect as
-                  0 on machines that support more than 32 bits of
-                  memory space.
-                  Any positive values less than 2MB will be ignored reset
-                  to 2MB.
+                  Any positive values less than 2MB will be ignored 
+                  and reset to 2MB.
                   In a server with multiple views, the limit applies
                   separately to the cache of each view.
-                  The default is 0.
+                  The default is <userinput>unlimited</userinput>.
                 </para>
               </listitem>
             </varlistentry>
@@ -8546,7 +8659,12 @@ avoid-v6-udp-ports { 40000; range 50000 60000; };
 		  a zone file in the <constant>raw</constant> format
 		  must be generated with the same check level as that
 		  specified in the <command>named</command> configuration
-		  file.  This statement sets the
+                  file.  Also, <constant>map</constant> format files are
+                  loaded directly into memory via memory mapping, with only
+                  minimal checking.
+                </para>
+                <para>
+                  This statement sets the
 		  <command>masterfile-format</command> for all zones,
 		  but can be overridden on a per-zone or per-view basis
 		  by including a <command>masterfile-format</command>
@@ -8639,7 +8757,9 @@ avoid-v6-udp-ports { 40000; range 50000 60000; };
             overridden: <command>notify</command>,
             <command>recursion</command> and
             <command>allow-new-zones</command> are
-            always set to <userinput>no</userinput>.
+            always set to <userinput>no</userinput>, and
+            <command>rate-limit</command> is set to allow
+            three responses per second.
           </para>
           <para>
             If you need to disable these zones, use the options
@@ -9164,77 +9284,123 @@ deny-answer-aliases { "example.net"; };
 	    Response policy zones are named in the
 	    <command>response-policy</command> option for the view or among the
 	    global options if there is no response-policy option for the view.
-	    RPZs are ordinary DNS zones containing RRsets
+	    Response policy zones are ordinary DNS zones containing RRsets
 	    that can be queried normally if allowed.
 	    It is usually best to restrict those queries with something like
 	    <command>allow-query { localhost; };</command>.
 	  </para>
 
 	  <para>
-	    Four policy triggers are encoded in RPZ records, QNAME, IP, NSIP,
-	    and NSDNAME.
-	    QNAME RPZ records triggered by query names of requests and targets
-	    of CNAME records resolved to generate the response.
-	    The owner name of a QNAME RPZ record is the query name relativized
-	    to the RPZ.
-	  </para>
+	    Five policy triggers can be encoded in RPZ records.
+	    <variablelist>
+	      <varlistentry>
+		<term><command>RPZ-CLIENT-IP</command></term>
+		<listitem>
+		  <para>
+		    IP records are triggered by the IP address of the
+		    DNS client.
+		    Client IP address triggers are encoded in records that have
+		    owner names that are subdomains of
+		    <command>rpz-client-ip</command> relativized to the
+		    policy zone origin name
+		    and encode an address or address block.
+		    IPv4 addresses are represented as
+		    <userinput>prefixlength.B4.B3.B2.B1.rpz-ip</userinput>.
+		    The IPv4 prefix length must be between 1 and 32.
+		    All four bytes, B4, B3, B2, and B1, must be present.
+		    B4 is the decimal value of the least significant byte of the
+		    IPv4 address as in IN-ADDR.ARPA.
+		  </para>
+
+		  <para>
+		    IPv6 addresses are encoded in a format similar
+		    to the standard IPv6 text representation,
+		    <userinput>prefixlength.W8.W7.W6.W5.W4.W3.W2.W1.rpz-ip</userinput>.
+		    Each of W8,...,W1 is a one to four digit hexadecimal number
+		    representing 16 bits of the IPv6 address as in the standard 
+		    text representation of IPv6 addresses,
+		    but reversed as in IN-ADDR.ARPA.
+		    All 8 words must be present except when one set of consecutive
+		    zero words is replaced with <userinput>.zz.</userinput>
+		    analogous to double colons (::) in standard IPv6 text
+		    encodings.
+		    The IPv6 prefix length must be between 64 and 128.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>QNAME</command></term>
+		<listitem>
+		  <para>
+		    QNAME policy records are triggered by query names of
+		    requests and targets of CNAME records resolved to generate
+		    the response.
+		    The owner name of a QNAME policy record is
+		    the query name relativized to the policy zone.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>RPZ-IP</command></term>
+		<listitem>
+		  <para>
+		    IP triggers are IP addresses in an
+		    A or AAAA record in the ANSWER section of a response.
+		    They are encoded like client-IP triggers except as
+		    subdomains of <command>rpz-ip</command>.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>RPZ-NSDNAME</command></term>
+		<listitem>
+		  <para>
+		    NSDNAME triggers match names of authoritative servers
+		    for the query name, a parent of the query name, a CNAME for
+		    query name, or a parent of a CNAME.
+		    They are encoded as subdomains of
+		    <command>rpz-nsdname</command> relativized
+		    to the RPZ origin name.
+		    NSIP triggers match IP addresses in A and
+		    AAAA RRsets for domains that can be checked against NSDNAME
+		    policy records.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>RPZ-NSIP</command></term>
+		<listitem>
+		  <para>
+		    NSIP triggers are encoded like IP triggers except as
+		    subdomains of <command>rpz-nsip</command>.
+		    NSDNAME and NSIP triggers are checked only for names with at
+		    least <command>min-ns-dots</command> dots.
+		    The default value of <command>min-ns-dots</command> is 1 to
+		    exclude top level domains.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+          </para>
 
 	  <para>
-	    The second kind of RPZ trigger is an IP address in an A and AAAA
-	    record in the ANSWER section of a response.
-	    IP address triggers are encoded in records that have owner names
-	    that are subdomains of <userinput>rpz-ip</userinput> relativized
-	    to the RPZ origin name and encode an IP address or address block.
-	    IPv4 trigger addresses are represented as
-	    <userinput>prefixlength.B4.B3.B2.B1.rpz-ip</userinput>.
-	    The prefix length must be between 1 and 32.
-	    All four bytes, B4, B3, B2, and B1, must be present.
-	    B4 is the decimal value of the least significant byte of the
-	    IPv4 address as in IN-ADDR.ARPA.
-	    IPv6 addresses are encoded in a format similar to the standard
-	    IPv6 text representation,
-	    <userinput>prefixlength.W8.W7.W6.W5.W4.W3.W2.W1.rpz-ip</userinput>.
-	    Each of W8,...,W1 is a one to four digit hexadecimal number
-	    representing 16 bits of the IPv6 address as in the standard text
-	    representation of IPv6 addresses, but reversed as in IN-ADDR.ARPA.
-	    All 8 words must be present except when consecutive
-	    zero words are replaced with <userinput>.zz.</userinput>
-	    analogous to double colons (::) in standard IPv6 text encodings.
-	    The prefix length must be between 1 and 128.
-	  </para>
-
-	  <para>
-	    NSDNAME triggers match names of authoritative servers
-	    for the query name, a parent of the query name, a CNAME for
-	    query name, or a parent of a CNAME.
-	    They are encoded as subdomains of
-	    <userinput>rpz-nsdomain</userinput> relativized
-	    to the RPZ origin name.
-	    NSIP triggers match IP addresses in A and
-	    AAAA RRsets for domains that can be checked against NSDNAME
-	    policy records.
-	    NSIP triggers are encoded like IP triggers except as subdomains of
-	    <userinput>rpz-nsip</userinput>.
-	    NSDNAME and NSIP triggers are checked only for names with at
-	    least <command>min-ns-dots</command> dots.
-	    The default value of <command>min-ns-dots</command> is 1 to
-	    exclude top level domains.
-	  </para>
-
-	  <para>
-	    The query response is checked against all RPZs, so
-	    two or more policy records can be triggered by a response.
-	    Because DNS responses can be rewritten according to at most one
+	    The query response is checked against all response policy zones,
+	    so two or more policy records can be triggered by a response.
+	    Because DNS responses are rewritten according to at most one
 	    policy record, a single record encoding an action (other than
 	    <command>DISABLED</command> actions) must be chosen.
-	    Triggers or the records that encode them are chosen in
-	    the following order:
+	    Triggers or the records that encode them are chosen for the
+	    rewriting in the following order:
 	    <itemizedlist>
 	      <listitem>Choose the triggered record in the zone that appears
-		first in the response-policy option.
+		first in the <command>response-policy</command> option.
 	      </listitem>
-	      <listitem>Prefer QNAME to IP to NSDNAME to NSIP triggers
-		in a single zone.
+	      <listitem>Prefer CLIENT-IP to QNAME to IP to NSDNAME to NSIP
+		triggers in a single zone.
 	      </listitem>
 	      <listitem>Among NSDNAME triggers, prefer the
 		trigger that matches the smallest name under the DNSSEC ordering.
@@ -9253,83 +9419,168 @@ deny-answer-aliases { "example.net"; };
 	    When the processing of a response is restarted to resolve
 	    DNAME or CNAME records and a policy record set has
 	    not been triggered,
-	    all RPZs are again consulted for the DNAME or CNAME names
-	    and addresses.
+	    all response policy zones are again consulted for the
+	    DNAME or CNAME names and addresses.
 	  </para>
 
 	  <para>
-	    RPZ record sets are sets of any types of DNS record except
-	    DNAME or DNSSEC that encode actions or responses to queries.
-	    <itemizedlist>
-	      <listitem>The <command>NXDOMAIN</command> response is encoded
-		by a CNAME whose target is the root domain (.)
-	      </listitem>
-	      <listitem>A CNAME whose target is the wildcard top-level
-		domain (*.) specifies the <command>NODATA</command> action,
-		which rewrites the response to NODATA or ANCOUNT=1.
-	      </listitem>
-	      <listitem>The <command>Local Data</command> action is
-		represented by a set ordinary DNS records that are used
-		to answer queries.  Queries for record types not the
-		set are answered with NODATA.
+	    RPZ record sets are any types of DNS record except
+	    DNAME or DNSSEC that encode actions or responses to
+	    individual queries.
+	    Any of the policies can be used with any of the triggers.
+	    For example, while the <command>TCP-only</command> policy is
+	    commonly used with <command>client-IP</command> triggers,
+	    it cn be used with any type of trigger to force the use of
+	    TCP for responses with owner names in a zone.
+	    <variablelist>
+	      <varlistentry>
+		<term><command>PASSTHRU</command></term>
+		<listitem>
+		  <para>
+		    The whitelist policy is specified
+		    by a CNAME whose target is <command>rpz-passthru</command>.
+		    It causes the response to not be rewritten
+		    and is most often used to "poke holes" in policies for
+		    CIDR blocks.
+		  </para>
+		</listitem>
+	      </varlistentry>
 
-		A special form of local data is a CNAME whose target is a
-		wildcard such as *.example.com.
-		It is used as if were an ordinary CNAME after the astrisk (*)
-		has been replaced with the query name.
-		The purpose for this special form is query logging in the
-		walled garden's authority DNS server.
-	      </listitem>
-	      <listitem>The <command>PASSTHRU</command> policy is specified
-		by a CNAME whose target is <command>rpz-passthru.</command>
-		It causes the response to not be rewritten
-		and is most often used to "poke holes" in policies for
-		CIDR blocks.
-		(A CNAME whose target is the variable part of its owner name
-		is an obsolete specification of the PASSTHRU policy.)
-	      </listitem>
-	    </itemizedlist>
+	      <varlistentry>
+		<term><command>DROP</command></term>
+		<listitem>
+		  <para>
+		    The blacklist policy is specified
+		    by a CNAME whose target is <command>rpz-drop</command>.
+		    It causes the response to be discarded.
+		    Nothing is sent to the DNS client.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>TCP-Only</command></term>
+		<listitem>
+		  <para>
+		    The "slip" policy is specified
+		    by a CNAME whose target is <command>rpz-tcp-only</command>.
+		    It changes UDP responses to short, truncated DNS responses
+		    that require the DNS client to try again with TCP.
+		    It is used to mitigate distributed DNS reflection attacks.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>NXDOMAIN</command></term>
+		<listitem>
+		  <para>
+		    The domain undefined response is encoded
+		    by a CNAME whose target is the root domain (.)
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>NODATA</command></term>
+		<listitem>
+		  <para>
+		    The empty set of resource records is specified by
+		    CNAME whose target is the wildcard top-level
+		    domain (*.).
+		    It rewrites the response to NODATA or ANCOUNT=1.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>Local Data</command></term>
+		<listitem>
+		  <para>
+		    A set of ordinary DNS records can be used to answer queries.
+		    Queries for record types not the set are answered with
+		    NODATA.
+		  </para>
+
+		  <para>
+		    A special form of local data is a CNAME whose target is a
+		    wildcard such as *.example.com.
+		    It is used as if were an ordinary CNAME after the astrisk (*)
+		    has been replaced with the query name.
+		    The purpose for this special form is query logging in the
+		    walled garden's authority DNS server.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
 	  </para>
 
 	  <para>
-	    The actions specified in an RPZ can be overridden with a
-	    <command>policy</command> clause in the
+	    All of the actions specified in all of the individual records
+	    in a policy zone
+	    can be overridden with a <command>policy</command> clause in the
 	    <command>response-policy</command> option.
-	    An organization using an RPZ provided by another organization might
-	    use this mechanism to redirect domains to its own walled garden.
-	    <itemizedlist>
-	      <listitem><command>GIVEN</command> says "do not override but
-		perform the action specified in the zone."
-	      </listitem>
-	      <listitem><command>DISABLED</command> causes policy records to do
-		nothing but log what they might have done.
-		The response to the DNS query will be written according to
-		any triggered policy records that are not disabled.
-		Disabled policy zones should appear first,
-		because they will often not be logged
-		if a higher precedence trigger is found first.
-	      </listitem>
-	      <listitem><command>PASSTHRU</command> causes all policy records
-		to act as if they were CNAME records with targets the variable
-		part of their owner name.  They protect the response from
-		being changed.
-	      </listitem>
-	      <listitem><command>NXDOMAIN</command> causes all RPZ records
-		to specify NXDOMAIN policies.
-	      </listitem>
-	      <listitem><command>NODATA</command> overrides with the
-		NODATA policy
-	      </listitem>
-	      <listitem><command>CNAME domain</command> causes all RPZ
-		policy records to act as if they were "cname domain" records.
-	      </listitem>
-	    </itemizedlist>
+	    An organization using a policy zone provided by another
+	    organization might use this mechanism to redirect domains
+	    to its own walled garden.
+	    <variablelist>
+	      <varlistentry>
+		<term><command>GIVEN</command></term>
+		<listitem>
+		  <para>The placeholder policy says "do not override but
+		    perform the action specified in the zone."
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>DISABLED</command></term>
+		<listitem>
+		  <para>
+		    The testing override policy causes policy zone records to do
+		    nothing but log what they would have done if the
+		    policy zone were not disabled.
+		    The response to the DNS query will be written (or not)
+		    according to any triggered policy records that are not
+		    disabled.
+		    Disabled policy zones should appear first,
+		    because they will often not be logged
+		    if a higher precedence trigger is found first.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		<term><command>PASSTHRU</command></term>,
+		<term><command>DROP</command></term>,
+		<term><command>TCP-Only</command></term>,
+		<term><command>NXDOMAIN</command></term>,
+		and
+		<term><command>NODATA</command></term>
+		<listitem>
+		  <para>
+		    override with the corresponding per-record policy.
+		  </para>
+		</listitem>
+	      </varlistentry>
+
+	      <varlistentry>
+		  <term><command>CNAME domain</command></term>
+		  <listitem>
+		    <para>
+		      causes all RPZ policy records to act as if they were
+		      "cname domain" records.
+		    </para>
+		  </listitem>
+		</varlistentry>
+	    </variablelist>
 	  </para>
 
 	  <para>
-	    By default, the actions encoded in an RPZ are applied
-	    only to queries that ask for recursion (RD=1).
-	    That default can be changed for a single RPZ or all RPZs in a view
+	    By default, the actions encoded in a response policy zone
+	    are applied only to queries that ask for recursion (RD=1).
+	    That default can be changed for a single policy zone or
+	    all response policy zones in a view
 	    with a <command>recursive-only no</command> clause.
 	    This feature is useful for serving the same zone files
 	    both inside and outside an RFC 1918 cloud and using RPZ to
@@ -9338,15 +9589,43 @@ deny-answer-aliases { "example.net"; };
 	  </para>
 
 	  <para>
-	    Also by default, RPZ actions are applied only to DNS requests that
-	    either do not request DNSSEC metadata (DO=0) or when no DNSSEC
-	    records are available for request name in the original zone (not
-	    the response policy zone).
-	    This default can be changed for all RPZs in a view with a
-	    <command>break-dnssec yes</command> clause.
-	    In that case, RPZ actions are applied regardless of DNSSEC.
-	    The name of the clause option reflects the fact that results
-	    rewritten by RPZ actions cannot verify.
+            Also by default, RPZ actions are applied only to DNS requests
+            that either do not request DNSSEC metadata (DO=0) or when no
+            DNSSEC records are available for request name in the original
+            zone (not the response policy zone).  This default can be
+            changed for all response policy zones in a view with a
+            <command>break-dnssec yes</command> clause.  In that case, RPZ
+            actions are applied regardless of DNSSEC.  The name of the
+            clause option reflects the fact that results rewritten by RPZ
+            actions cannot verify.
+	  </para>
+
+	  <para>
+            No DNS records are needed for a QNAME or Client-IP trigger.
+	    The name or IP address itself is sufficient,
+	    so in principle the query name need not be recursively resolved.
+	    However, not resolving the requested
+            name can leak the fact that response policy rewriting is in use
+            and that the name is listed in a policy zone to operators of
+            servers for listed names.  To prevent that information leak, by
+            default any recursion needed for a request is done before any
+            policy triggers are considered.  Because listed domains often
+            have slow authoritative servers, this default behavior can cost
+            significant time.
+	    The <command>qname-wait-recurse no</command> option
+            overrides that default behavior when recursion cannot
+            change a non-error response.
+	    The option does not affect QNAME or client-IP triggers
+	    in policy zones listed
+	    after other zones containing IP, NSIP and NSDNAME triggers, because
+            those may depend on the A, AAAA, and NS records that would be
+            found during recursive resolution.  It also does not affect
+            DNSSEC requests (DO=1) unless <command>break-dnssec yes</command>
+            is in use, because the response would depend on whether or not
+            RRSIG records were found during resolution.
+	    The option can cause appear to rewrite error responses
+	    such as SERVFAIL when no recursion is done to discover problems
+	    at the authoritative server.
 	  </para>
 
 	  <para>
@@ -9374,26 +9653,38 @@ deny-answer-aliases { "example.net"; };
 
 ; QNAME policy records.  There are no periods (.) after the owner names.
 nxdomain.domain.com     CNAME   .               ; NXDOMAIN policy
+*.nxdomain.domain.com   CNAME   .               ; NXDOMAIN policy
 nodata.domain.com       CNAME   *.              ; NODATA policy
+*.nodata.domain.com     CNAME   *.              ; NODATA policy
 bad.domain.com          A       10.0.0.1        ; redirect to a walled garden
                         AAAA    2001:2::1
+bzone.domain.com        CNAME   garden.example.com.
 
 ; do not rewrite (PASSTHRU) OK.DOMAIN.COM
 ok.domain.com           CNAME   rpz-passthru.
-
-bzone.domain.com        CNAME   garden.example.com.
 
 ; redirect x.bzone.domain.com to x.bzone.domain.com.garden.example.com
 *.bzone.domain.com      CNAME   *.garden.example.com.
 
 
-; IP policy records that rewrite all answers for 127/8 except 127.0.0.1
+; IP policy records that rewrite all responses containing A records in 127/8
+;       except 127.0.0.1
 8.0.0.0.127.rpz-ip      CNAME   .
 32.1.0.0.127.rpz-ip     CNAME   rpz-passthru.
 
 ; NSDNAME and NSIP policy records
 ns.domain.com.rpz-nsdname   CNAME   .
 48.zz.2.2001.rpz-nsip       CNAME   .
+
+; blacklist and whitelist some DNS clients
+112.zz.2001.rpz-client-ip    CNAME   rpz-drop.
+8.0.0.0.127.rpz-client-ip    CNAME   rpz-drop.
+
+; force some DNS clients and responses in the example.com zone to TCP
+16.0.0.1.10.rpz-client-ip   CNAME   rpz-tcp-only.
+example.com                 CNAME   rpz-tcp-only.
+*.example.com               CNAME   rpz-tcp-only.
+
 </programlisting>
           <para>
             RPZ can affect server performance.
@@ -9419,11 +9710,6 @@ ns.domain.com.rpz-nsdname   CNAME   .
 
 	<sect3>
 	  <title>Response Rate Limiting</title>
-	  <para>
-            This feature is only available when <acronym>BIND</acronym> 9
-            is compiled with the <userinput>--enable-rrl</userinput>
-            option on the "configure" command line.
-          </para>
 	  <para>
 	    Excessive almost identical UDP <emphasis>responses</emphasis>
 	    can be controlled by configuring a
@@ -9535,11 +9821,28 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    amplification, of "slipped" responses make them unattractive
 	    for reflection DoS attacks.
 	    <command>slip</command> must be between 0 and 10.
-	    A value of 0 does not "slip";
-	    no truncated responses are sent due to rate limiting.
+	    A value of 0 does not "slip":
+	    no truncated responses are sent due to rate limiting,
+	    all responses are dropped.
+	    A value of 1 causes every response to slip;
+	    values between 2 and 10 cause every n'th response to slip.
 	    Some error responses including REFUSED and SERVFAIL
 	    cannot be replaced with truncated responses and are instead
 	    leaked at the <command>slip</command> rate.
+	  </para>
+
+	  <para>
+	    (NOTE: Dropped responses from an authoritative server may
+	    reduce the difficulty of a third party successfully forging
+	    a response to a recursive resolver. The best security
+	    against forged responses is for authoritative operators
+	    to sign their zones using DNSSEC and for resolver operators
+	    to validate the responses. When this is not an option,
+	    operators who are more concerned with response integrity
+	    than with flood mitigation may consider setting
+	    <command>slip</command> to 1, causing all rate-limited
+	    responses to be truncated rather than dropped.  This reduces
+	    the effectiveness of rate-limiting against reflection attacks.)
 	  </para>
 
 	  <para>
@@ -9637,7 +9940,7 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	    statistics.
 	    Responses that truncated by rate limits are included in
 	    <command>RateSlipped</command> and <command>RespTruncated</command>.
-	  </para>
+          </para>
 	</sect3>
       </sect2>
 
@@ -9654,14 +9957,14 @@ ns.domain.com.rpz-nsdname   CNAME   .
     <optional> transfers <replaceable>number</replaceable> ; </optional>
     <optional> transfer-format <replaceable>( one-answer | many-answers )</replaceable> ; ]</optional>
     <optional> keys <replaceable>{ string ; <optional> string ; <optional>...</optional></optional> }</replaceable> ; </optional>
-    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> query-source <optional> address ( <replaceable>ip_addr</replaceable> | <replaceable>*</replaceable> ) </optional>
-                  <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional>; </optional>
+                  <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> query-source-v6 <optional> address ( <replaceable>ip_addr</replaceable> | <replaceable>*</replaceable> ) </optional>
-                     <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional>; </optional>
+                     <optional> port ( <replaceable>ip_port</replaceable> | <replaceable>*</replaceable> ) </optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> use-queryport-pool <replaceable>yes_or_no</replaceable>; </optional>
     <optional> queryport-pool-ports <replaceable>number</replaceable>; </optional>
     <optional> queryport-pool-updateinterval <replaceable>number</replaceable>; </optional>
@@ -9882,8 +10185,9 @@ ns.domain.com.rpz-nsdname   CNAME   .
 	  This statement intends to be flexible to support multiple
 	  communication protocols in the future, but currently only
 	  HTTP access is supported.
-	  It requires that BIND 9 be compiled with libxml2;
-	  the <command>statistics-channels</command> statement is
+          It requires that BIND 9 be compiled with libxml2 and/or
+          json-c (also known as libjson0); the
+          <command>statistics-channels</command> statement is
 	  still accepted even if it is built without the library,
 	  but any HTTP access will fail with an error.
         </para>
@@ -9892,7 +10196,8 @@ ns.domain.com.rpz-nsdname   CNAME   .
           An <command>inet</command> control channel is a TCP socket
 	  listening at the specified <command>ip_port</command> on the
 	  specified <command>ip_addr</command>, which can be an IPv4 or IPv6
-	  address.  An <command>ip_addr</command> of <literal>*</literal> (asterisk) is
+          address.  An <command>ip_addr</command> of <literal>*</literal>
+          (asterisk) is
 	  interpreted as the IPv4 wildcard address; connections will be
 	  accepted on any of the system's IPv4 addresses.
 	  To listen on the IPv6 wildcard address,
@@ -9924,19 +10229,17 @@ ns.domain.com.rpz-nsdname   CNAME   .
         </para>
 
         <para>
-          If the statistics channel is configured to listen on 127.0.0.1
+          The statistics are available in various formats and views
+          depending on the URI used to access them.  For example, if
+          the statistics channel is configured to listen on 127.0.0.1
           port 8888, then the statistics are accessible in XML format at
           <ulink url="http://127.0.0.1:8888/"
                   >http://127.0.0.1:8888/</ulink> or
           <ulink url="http://127.0.0.1:8888/xml"
                   >http://127.0.0.1:8888/xml</ulink>. A CSS file is
           included which can format the XML statistics into tables 
-          when viewed with a stylesheet-capable browser.  When
-          <acronym>BIND</acronym> 9 is configured with --enable-newstats, 
-          a new XML schema is used (version 3) which adds additional
-          zone statistics and uses a flatter tree for more efficient
-          parsing.  The stylesheet included uses the Google Charts API
-          to render data into into charts and graphs when using a
+          when viewed with a stylesheet-capable browser, and into 
+          charts and graphs using the Google Charts API when using a
           javascript-capable browser.
         </para>
 
@@ -9951,6 +10254,28 @@ ns.domain.com.rpz-nsdname   CNAME   .
           If the requested schema is supported by the server, then
           it will respond; if not, it will return a "page not found"
           error.
+        </para>
+
+        <para>
+          The full set of statistics can also be read in JSON format at
+          <ulink url="http://127.0.0.1:8888/json"
+                  >http://127.0.0.1:8888/json</ulink>.
+          Broken-out subsets of the statistics can be viewed at
+          <ulink url="http://127.0.0.1:8888/json/server"
+                  >http://127.0.0.1:8888/json/server</ulink>
+          (server and resolver statistics),
+          <ulink url="http://127.0.0.1:8888/json/zones"
+                  >http://127.0.0.1:8888/json/zones</ulink>
+          (zone statistics),
+          <ulink url="http://127.0.0.1:8888/json/net"
+                  >http://127.0.0.1:8888/json/net</ulink>
+          (network status and socket statistics),
+          <ulink url="http://127.0.0.1:8888/json/mem"
+                  >http://127.0.0.1:8888/json/mem</ulink>
+          (memory manager statistics),
+          <ulink url="http://127.0.0.1:8888/json/tasks"
+                  >http://127.0.0.1:8888/json/tasks</ulink>
+          (task manager statistics).
         </para>
       </sect2>
 
@@ -10287,8 +10612,8 @@ view "external" {
     <optional> dnssec-dnskey-kskonly <replaceable>yes_or_no</replaceable>; </optional>
     <optional> dnssec-loadkeys-interval <replaceable>number</replaceable>; </optional>
     <optional> update-policy <replaceable>local</replaceable> | { <replaceable>update_policy_rule</replaceable> <optional>...</optional> }; </optional>
-    <optional> also-notify { <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ;
-                  <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ; ... </optional> }; </optional>
+    <optional> also-notify { <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ;
+                  <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; ... </optional> }; </optional>
     <optional> check-names (<constant>warn</constant>|<constant>fail</constant>|<constant>ignore</constant>) ; </optional>
     <optional> check-mx (<constant>warn</constant>|<constant>fail</constant>|<constant>ignore</constant>) ; </optional>
     <optional> check-wildcard <replaceable>yes_or_no</replaceable>; </optional>
@@ -10296,11 +10621,11 @@ view "external" {
     <optional> check-integrity <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> dialup <replaceable>dialup_option</replaceable> ; </optional>
     <optional> file <replaceable>string</replaceable> ; </optional>
-    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>) ; </optional>
+    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>|<constant>map</constant>) ; </optional>
     <optional> journal <replaceable>string</replaceable> ; </optional>
     <optional> max-journal-size <replaceable>size_spec</replaceable>; </optional>
     <optional> forward (<constant>only</constant>|<constant>first</constant>) ; </optional>
-    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ; ... </optional> }; </optional>
+    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; ... </optional> }; </optional>
     <optional> ixfr-base <replaceable>string</replaceable> ; </optional>
     <optional> ixfr-from-differences <replaceable>yes_or_no</replaceable>; </optional>
     <optional> ixfr-tmp-file <replaceable>string</replaceable> ; </optional>
@@ -10313,8 +10638,8 @@ view "external" {
     <optional> notify-delay <replaceable>seconds</replaceable> ; </optional>
     <optional> notify-to-soa <replaceable>yes_or_no</replaceable>; </optional>
     <optional> pubkey <replaceable>number</replaceable> <replaceable>number</replaceable> <replaceable>number</replaceable> <replaceable>string</replaceable> ; </optional>
-    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> zone-statistics <replaceable>full</replaceable> | <replaceable>terse</replaceable> | <replaceable>none</replaceable>; </optional>
     <optional> sig-validity-interval <replaceable>number</replaceable> <optional><replaceable>number</replaceable></optional> ; </optional>
     <optional> sig-signing-nodes <replaceable>number</replaceable> ; </optional>
@@ -10345,23 +10670,25 @@ zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replacea
     <optional> dnssec-loadkeys-interval <replaceable>number</replaceable>; </optional>
     <optional> dnssec-secure-to-insecure <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> try-tcp-refresh <replaceable>yes_or_no</replaceable>; </optional>
-    <optional> also-notify <optional>port <replaceable>ip_port</replaceable></optional> { ( <replaceable>masters_list</replaceable> | <replaceable>ip_addr</replaceable>
+    <optional> also-notify <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> { ( <replaceable>masters_list</replaceable> | <replaceable>ip_addr</replaceable>
                               <optional>port <replaceable>ip_port</replaceable></optional>
+                              <optional>dscp <replaceable>ip_dscp</replaceable></optional>
                               <optional>key <replaceable>key</replaceable></optional> ) ; <optional>...</optional> }; </optional>
     <optional> check-names (<constant>warn</constant>|<constant>fail</constant>|<constant>ignore</constant>) ; </optional>
     <optional> dialup <replaceable>dialup_option</replaceable> ; </optional>
     <optional> file <replaceable>string</replaceable> ; </optional>
-    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>) ; </optional>
+    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>|<constant>map</constant>) ; </optional>
     <optional> journal <replaceable>string</replaceable> ; </optional>
     <optional> max-journal-size <replaceable>size_spec</replaceable>; </optional>
     <optional> forward (<constant>only</constant>|<constant>first</constant>) ; </optional>
-    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ; ... </optional> }; </optional>
+    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; ... </optional> }; </optional>
     <optional> ixfr-base <replaceable>string</replaceable> ; </optional>
     <optional> ixfr-from-differences <replaceable>yes_or_no</replaceable>; </optional>
     <optional> ixfr-tmp-file <replaceable>string</replaceable> ; </optional>
     <optional> maintain-ixfr-base <replaceable>yes_or_no</replaceable> ; </optional>
-    <optional> masters <optional>port <replaceable>ip_port</replaceable></optional> { ( <replaceable>masters_list</replaceable> | <replaceable>ip_addr</replaceable>
+    <optional> masters <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> { ( <replaceable>masters_list</replaceable> | <replaceable>ip_addr</replaceable>
                               <optional>port <replaceable>ip_port</replaceable></optional>
+                              <optional>dscp <replaceable>ip_dscp</replaceable></optional>
                               <optional>key <replaceable>key</replaceable></optional> ) ; <optional>...</optional> }; </optional>
     <optional> max-ixfr-log-size <replaceable>number</replaceable> ; </optional>
     <optional> max-transfer-idle-in <replaceable>number</replaceable> ; </optional>
@@ -10372,14 +10699,15 @@ zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replacea
     <optional> notify-delay <replaceable>seconds</replaceable> ; </optional>
     <optional> notify-to-soa <replaceable>yes_or_no</replaceable>; </optional>
     <optional> pubkey <replaceable>number</replaceable> <replaceable>number</replaceable> <replaceable>number</replaceable> <replaceable>string</replaceable> ; </optional>
-    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> alt-transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> alt-transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> alt-transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>)
-                             <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+                             <optional>port <replaceable>ip_port</replaceable></optional>
+                             <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> use-alt-transfer-source <replaceable>yes_or_no</replaceable>; </optional>
-    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+    <optional> notify-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> notify-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> zone-statistics <replaceable>full</replaceable> | <replaceable>terse</replaceable> | <replaceable>none</replaceable>; </optional>
     <optional> sig-validity-interval <replaceable>number</replaceable> <optional><replaceable>number</replaceable></optional> ; </optional>
     <optional> sig-signing-nodes <replaceable>number</replaceable> ; </optional>
@@ -10412,21 +10740,22 @@ zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replacea
     <optional> dialup <replaceable>dialup_option</replaceable> ; </optional>
     <optional> delegation-only <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> file <replaceable>string</replaceable> ; </optional>
-    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>) ; </optional>
+    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>|<constant>map</constant>) ; </optional>
     <optional> forward (<constant>only</constant>|<constant>first</constant>) ; </optional>
-    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ; ... </optional> }; </optional>
-    <optional> masters <optional>port <replaceable>ip_port</replaceable></optional> { ( <replaceable>masters_list</replaceable> | <replaceable>ip_addr</replaceable>
+    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; ... </optional> }; </optional>
+    <optional> masters <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> { ( <replaceable>masters_list</replaceable> | <replaceable>ip_addr</replaceable>
                               <optional>port <replaceable>ip_port</replaceable></optional>
+                              <optional>dscp <replaceable>ip_dscp</replaceable></optional>
                               <optional>key <replaceable>key</replaceable></optional> ) ; <optional>...</optional> }; </optional>
     <optional> max-transfer-idle-in <replaceable>number</replaceable> ; </optional>
     <optional> max-transfer-time-in <replaceable>number</replaceable> ; </optional>
     <optional> pubkey <replaceable>number</replaceable> <replaceable>number</replaceable> <replaceable>number</replaceable> <replaceable>string</replaceable> ; </optional>
-    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+    <optional> transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>)
-                         <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
-    <optional> alt-transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+                         <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
+    <optional> alt-transfer-source (<replaceable>ip4_addr</replaceable> | <constant>*</constant>) <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> alt-transfer-source-v6 (<replaceable>ip6_addr</replaceable> | <constant>*</constant>)
-                            <optional>port <replaceable>ip_port</replaceable></optional> ; </optional>
+                            <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; </optional>
     <optional> use-alt-transfer-source <replaceable>yes_or_no</replaceable>; </optional>
     <optional> zone-statistics <replaceable>yes_or_no</replaceable> ; </optional>
     <optional> database <replaceable>string</replaceable> ; </optional>
@@ -10448,19 +10777,23 @@ zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replacea
 zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replaceable></optional> {
     type forward;
     <optional> forward (<constant>only</constant>|<constant>first</constant>) ; </optional>
-    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> ; ... </optional> }; </optional>
+    <optional> forwarders { <optional> <replaceable>ip_addr</replaceable> <optional>port <replaceable>ip_port</replaceable></optional> <optional>dscp <replaceable>ip_dscp</replaceable></optional> ; ... </optional> }; </optional>
     <optional> delegation-only <replaceable>yes_or_no</replaceable> ; </optional>
 };
 
 zone <replaceable>"."</replaceable> <optional><replaceable>class</replaceable></optional> {
     type redirect;
     file <replaceable>string</replaceable> ;
-    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>) ; </optional>
+    <optional> masterfile-format (<constant>text</constant>|<constant>raw</constant>|<constant>map</constant>) ; </optional>
     <optional> allow-query { <replaceable>address_match_list</replaceable> }; </optional>
 };
 
 zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replaceable></optional> {
     type delegation-only;
+};
+
+zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replaceable></optional> {
+    <optional> in-view <replaceable>string</replaceable> ; </optional>
 };
 
 </programlisting>
@@ -10809,8 +11142,8 @@ zone <replaceable>zone_name</replaceable> <optional><replaceable>class</replacea
               in the mid-1970s. Zone data for it can be specified with the <literal>CHAOS</literal> class.
             </para>
           </sect3>
-          <sect3>
 
+          <sect3>
             <title>Zone Options</title>
 
             <variablelist>
@@ -11998,6 +12331,52 @@ example.com. NS ns2.example.net.
 	      checked for each existing record type.
 	    </para>
           </sect3>
+
+          <sect3>
+            <title>Multiple views</title>
+            <para>
+              When multiple views are in use, a zone may be
+              referenced by more than one of them. Often, the views
+              will contain different zones with the same name, allowing
+              different clients to receive different answers for the same
+              queries. At times, however, it is desirable for multiple
+              views to contain identical zones.  The
+              <command>in-view</command> zone option provides an efficient
+              way to do this: it allows a view to reference a zone that
+              was defined in a previously configured view. Example:
+            </para>
+            <programlisting>
+view internal {
+    match-clients { 10/8; };
+
+    zone example.com {
+        type master;
+        file "example-external.db";
+    };
+};
+
+view external {
+    match-clients { any; };
+
+    zone example.com {
+        in-view internal;
+    };
+};
+            </programlisting>
+            <para>
+              An <command>in-view</command> option cannot refer to a view
+              that is configured later in the configuration file.
+            </para>
+            <para>
+              A <command>zone</command> statement which uses the
+              <command>in-view</command> option may not use any other
+              options with the exception of <command>forward</command>
+              and <command>forwarders</command>. (These options control
+              the behavior of the containing view, rather than changing
+              the zone object itself.)
+            </para>
+          </sect3>
+
         </sect2>
       </sect1>
       <sect1>
@@ -13581,18 +13960,28 @@ HOST-127.EXAMPLE. MX 0 .
 	  <para>
 	    In addition to the standard textual format, BIND 9
 	    supports the ability to read or dump to zone files in
-	    other formats.  The <constant>raw</constant> format is
-	    currently available as an additional format.  It is a
-	    binary format representing BIND 9's internal data
-	    structure directly, thereby remarkably improving the
-	    loading time.
+            other formats. 
 	  </para>
 	  <para>
-	    For a primary server, a zone file in the
-	    <constant>raw</constant> format is expected to be
-	    generated from a textual zone file by the
-	    <command>named-compilezone</command> command.  For a
-	    secondary server or for a dynamic zone, it is automatically
+            The <constant>raw</constant> format is
+            a binary representation of zone data in a manner similar
+            to that used in zone transfers.  Since it does not require
+            parsing text, load time is significantly reduced.
+	  </para>
+	  <para>
+            An even faster alternative is the <constant>map</constant>
+            format, which is an image of a <acronym>BIND</acronym> 9
+            in-memory zone database; it is capable of being loaded
+            directly into memory via the <command>mmap()</command>
+            function; the zone can begin serving queries almost
+            immediately.
+	  </para>
+	  <para>
+	    For a primary server, a zone file in
+            <constant>raw</constant> or <constant>map</constant>
+            format is expected to be generated from a textual zone
+            file by the <command>named-compilezone</command> command. 
+            For a secondary server or for a dynamic zone, it is automatically
 	    generated (if this format is specified by the
 	    <command>masterfile-format</command> option) when
 	    <command>named</command> dumps the zone contents after
@@ -13607,14 +13996,21 @@ HOST-127.EXAMPLE. MX 0 .
 	    <command>named-compilezone</command> command again.
 	  </para>
     	  <para>
-	     Although the <constant>raw</constant> format uses the
-	     network byte order and avoids architecture-dependent
-	     data alignment so that it is as much portable as
-	     possible, it is primarily expected to be used inside
-	     the same single system.  In order to export a zone
-	     file in the <constant>raw</constant> format or make a
-	     portable backup of the file, it is recommended to
-	     convert the file to the standard textual representation.
+	    Note that <command>map</command> format is extremely
+	    architecture-specific.  A <constant>map</constant>
+	    file <emphasis>cannot</emphasis> be used on a system
+	    with different pointer size, endianness or data alignment
+	    than the system on which it was generated, and should in
+	    general be used only inside a single system.
+	    While <constant>raw</constant> format uses 
+	    network byte order and avoids architecture-dependent
+	    data alignment so that it is as portable as
+	    possible, it is also primarily expected to be used
+	    inside the same single system.  To export a
+	    zone file in either <constant>raw</constant> or
+	    <constant>map</constant> format, or make a
+	    portable backup of such a file, conversion to
+	    <constant>text</constant> format is recommended.
 	  </para>
 	</sect2>
       </sect1>
@@ -13724,7 +14120,8 @@ HOST-127.EXAMPLE. MX 0 .
 		    If the exclamation mark (!) is printed for a RR
 		    type, it means that particular type of RRset is
 		    known to be nonexistent (this is also known as
-		    "NXRRSET").
+		    "NXRRSET").  If a hash mark (#) is present then
+		    the RRset is marked for garbage collection.
 		    Maintained per view.
                   </para>
                 </entry>
@@ -14380,19 +14777,6 @@ HOST-127.EXAMPLE. MX 0 .
 		  </row>
 		  <row rowsep="0">
 		    <entry colname="1">
-		      <para><command>RPZRewrites</command></para>
-		    </entry>
-		    <entry colname="2">
-		      <para><command></command></para>
-		    </entry>
-		    <entry colname="3">
-		      <para>
-			Response policy zone rewrites.
-		      </para>
-		    </entry>
-		  </row>
-		  <row rowsep="0">
-		    <entry colname="1">
 		      <para><command>RateDropped</command></para>
 		    </entry>
 		    <entry colname="2">
@@ -14414,6 +14798,19 @@ HOST-127.EXAMPLE. MX 0 .
 		    <entry colname="3">
 		      <para>
 			Responses truncated by rate limits.
+		      </para>
+		    </entry>
+		  </row>
+		  <row rowsep="0">
+		    <entry colname="1">
+		      <para><command>RPZRewrites</command></para>
+		    </entry>
+		    <entry colname="2">
+		      <para><command></command></para>
+		    </entry>
+		    <entry colname="3">
+		      <para>
+			Response policy zone rewrites.
 		      </para>
 		    </entry>
 		  </row>

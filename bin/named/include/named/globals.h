@@ -29,6 +29,7 @@
 #include <isccfg/aclconf.h>
 #include <isccfg/cfg.h>
 
+#include <dns/acl.h>
 #include <dns/zone.h>
 
 #include <dst/dst.h>
@@ -73,6 +74,7 @@ EXTERN const char *		ns_g_srcid		INIT(SRCID);
 EXTERN const char *		ns_g_buildtime		INIT(BUILDTIME);
 EXTERN const char *		ns_g_configargs		INIT(CONFIGARGS);
 EXTERN in_port_t		ns_g_port		INIT(0);
+EXTERN isc_dscp_t		ns_g_dscp		INIT(-1);
 EXTERN in_port_t		lwresd_g_listenport	INIT(0);
 
 EXTERN ns_server_t *		ns_g_server		INIT(NULL);
@@ -156,11 +158,19 @@ EXTERN const char *		ns_g_engine		INIT(NULL);
 
 EXTERN int			ns_g_listen		INIT(3);
 EXTERN isc_time_t		ns_g_boottime;
+EXTERN isc_time_t		ns_g_configtime;
 EXTERN isc_boolean_t		ns_g_memstatistics	INIT(ISC_FALSE);
 EXTERN isc_boolean_t		ns_g_clienttest		INIT(ISC_FALSE);
+EXTERN isc_boolean_t		ns_g_dropedns		INIT(ISC_FALSE);
+EXTERN isc_boolean_t		ns_g_noedns		INIT(ISC_FALSE);
 EXTERN isc_boolean_t		ns_g_nosoa		INIT(ISC_FALSE);
 EXTERN isc_boolean_t		ns_g_noaa		INIT(ISC_FALSE);
+EXTERN unsigned int		ns_g_delay		INIT(0);
 EXTERN isc_boolean_t		ns_g_nonearest		INIT(ISC_FALSE);
+
+#ifdef HAVE_GEOIP
+EXTERN dns_geoip_databases_t	*ns_g_geoip		INIT(NULL);
+#endif
 
 #undef EXTERN
 #undef INIT

@@ -110,6 +110,7 @@ nmake /nologo -f signzone.mak CFG="signzone - Win32 Release"  NO_EXTERNAL_DEPS="
 nmake /nologo -f dsfromkey.mak CFG="dsfromkey - Win32 Release"  NO_EXTERNAL_DEPS="1"
 nmake /nologo -f keyfromlabel.mak CFG="keyfromlabel - Win32 Release"  NO_EXTERNAL_DEPS="1"
 nmake /nologo -f revoke.mak CFG="revoke - Win32 Release"  NO_EXTERNAL_DEPS="1"
+nmake /nologo -f importkey.mak CFG="importkey- Win32 Release"  NO_EXTERNAL_DEPS="1"
 nmake /nologo -f settime.mak CFG="settime - Win32 Release"  NO_EXTERNAL_DEPS="1"
 nmake /nologo -f verify.mak CFG="verify - Win32 Release"  NO_EXTERNAL_DEPS="1"
 cd ..\..
@@ -126,6 +127,7 @@ nmake /nologo -f genrandom.mak CFG="genrandom - Win32 Release"  NO_EXTERNAL_DEPS
 nmake /nologo -f nsec3hash.mak CFG="nsec3hash - Win32 Release"  NO_EXTERNAL_DEPS="1"
 nmake /nologo -f journalprint.mak CFG="journalprint - Win32 Release"  NO_EXTERNAL_DEPS="1"
 nmake /nologo -f ischmacfixup.mak CFG="ischmacfixup - Win32 Release"  NO_EXTERNAL_DEPS="1"
+nmake /nologo -f rrchecker.mak CFG="rrchecker - Win32 Release"  NO_EXTERNAL_DEPS="1"
 cd ..\..
 rem This is the BIND 9 Installer
 

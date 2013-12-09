@@ -125,7 +125,8 @@ isc_boolean_t
 	usesearch = ISC_FALSE,
 	showsearch = ISC_FALSE,
 	qr = ISC_FALSE,
-	is_dst_up = ISC_FALSE;
+	is_dst_up = ISC_FALSE,
+	keep_open = ISC_FALSE;
 in_port_t port = 53;
 unsigned int timeout = 0;
 unsigned int extrabytes;
@@ -157,6 +158,9 @@ static void		idn_check_result(idn_result_t r, const char *msg);
 int  idnoptions	= 0;
 #endif
 
+isc_socket_t *keep = NULL;
+isc_sockaddr_t keepaddr;
+
 /*%
  * Exit Codes:
  *
@@ -180,6 +184,7 @@ isc_boolean_t validated = ISC_TRUE;
 isc_entropy_t *entp = NULL;
 isc_mempool_t *commctx = NULL;
 isc_boolean_t debugging = ISC_FALSE;
+isc_boolean_t debugtiming = ISC_FALSE;
 isc_boolean_t memdebugging = ISC_FALSE;
 char *progname = NULL;
 isc_mutex_t lookup_lock;
@@ -536,9 +541,15 @@ fatal(const char *format, ...) {
 void
 debug(const char *format, ...) {
 	va_list args;
+	isc_time_t t;
 
 	if (debugging) {
 		fflush(stdout);
+		if (debugtiming) {
+			TIME_NOW(&t);
+			fprintf(stderr, "%d.%06d: ", isc_time_seconds(&t),
+				isc_time_nanoseconds(&t) / 1000);
+		}
 		va_start(args, format);
 		vfprintf(stderr, format, args);
 		va_end(args);
@@ -1817,8 +1828,8 @@ followup_lookup(dns_message_t *msg, dig_query_t *query, dns_section_t section)
 			debug("adding server %s", namestr);
 			num = getaddresses(lookup, namestr, &lresult);
 			if (lresult != ISC_R_SUCCESS) {
-				debug("couldn't get address for '%s': %s",
-				      namestr, isc_result_totext(lresult));
+				printf("couldn't get address for '%s': %s\n",
+				       namestr, isc_result_totext(lresult));
 				if (addresses_result == ISC_R_SUCCESS) {
 					addresses_result = lresult;
 					strcpy(bad_namestr, namestr);
@@ -1881,6 +1892,9 @@ static isc_boolean_t
 next_origin(dig_query_t *query) {
 	dig_lookup_t *lookup;
 	dig_searchlist_t *search;
+	dns_fixedname_t fixed;
+	dns_name_t *name;
+	isc_result_t result;
 
 	INSIST(!free_now);
 
@@ -1893,6 +1907,19 @@ next_origin(dig_query_t *query) {
 		 * about finding the next entry.
 		 */
 		return (ISC_FALSE);
+
+	/*
+	 * Check for a absolute name or ndots being met.
+	 */
+	dns_fixedname_init(&fixed);
+	name = dns_fixedname_name(&fixed);
+	result = dns_name_fromstring2(name, query->lookup->textname, NULL,
+				      0, NULL);
+	if (result == ISC_R_SUCCESS &&
+	    (dns_name_isabsolute(name) ||
+	     (int)dns_name_countlabels(name) > ndots))
+		return (ISC_FALSE);
+
 	if (query->lookup->origin == NULL && !query->lookup->need_search)
 		/*
 		 * Then we just did rootorg; there's nothing left.
@@ -2352,8 +2379,10 @@ send_done(isc_task_t *_task, isc_event_t *event) {
 
 	for  (b = ISC_LIST_HEAD(sevent->bufferlist);
 	      b != NULL;
-	      b = ISC_LIST_HEAD(sevent->bufferlist))
+	      b = ISC_LIST_HEAD(sevent->bufferlist)) {
 		ISC_LIST_DEQUEUE(sevent->bufferlist, b, link);
+		isc_mem_free(mctx, b);
+	}
 
 	query = event->ev_arg;
 	query->waiting_senddone = ISC_FALSE;
@@ -2508,6 +2537,15 @@ send_tcp_connect(dig_query_t *query) {
 	}
 
 	INSIST(query->sock == NULL);
+
+	if (keep != NULL && isc_sockaddr_equal(&keepaddr, &query->sockaddr)) {
+		sockcount++;
+		isc_socket_attach(keep, &query->sock);
+		query->waiting_connect = ISC_FALSE;
+		launch_next_query(query, ISC_TRUE);
+		goto search;
+	}
+
 	result = isc_socket_create(socketmgr,
 				   isc_sockaddr_pf(&query->sockaddr),
 				   isc_sockettype_tcp, &query->sock);
@@ -2530,6 +2568,7 @@ send_tcp_connect(dig_query_t *query) {
 	result = isc_socket_connect(query->sock, &query->sockaddr,
 				    global_task, connect_done, query);
 	check_result(result, "isc_socket_connect");
+ search:
 	/*
 	 * If we're at the endgame of a nameserver search, we need to
 	 * immediately bring up all the queries.  Do it here.
@@ -2545,6 +2584,17 @@ send_tcp_connect(dig_query_t *query) {
 	}
 }
 
+static isc_buffer_t *
+clone_buffer(isc_buffer_t *source) {
+	isc_buffer_t *buffer;
+	buffer = isc_mem_allocate(mctx, sizeof(*buffer));
+	if (buffer == NULL)
+		fatal("memory allocation failure in %s:%d",
+		      __FILE__, __LINE__);
+	*buffer = *source;
+	return (buffer);
+}
+
 /*%
  * Send a UDP packet to the remote nameserver, possible starting the
  * recv action as well.  Also make sure that the timer is running and
@@ -2554,6 +2604,7 @@ static void
 send_udp(dig_query_t *query) {
 	dig_lookup_t *l = NULL;
 	isc_result_t result;
+	isc_buffer_t *sendbuf;
 
 	debug("send_udp(%p)", query);
 
@@ -2600,14 +2651,16 @@ send_udp(dig_query_t *query) {
 		debug("recvcount=%d", recvcount);
 	}
 	ISC_LIST_INIT(query->sendlist);
-	ISC_LIST_ENQUEUE(query->sendlist, &query->sendbuf, link);
+	sendbuf = clone_buffer(&query->sendbuf);
+	ISC_LIST_ENQUEUE(query->sendlist, sendbuf, link);
 	debug("sending a request");
 	TIME_NOW(&query->time_sent);
 	INSIST(query->sock != NULL);
 	query->waiting_senddone = ISC_TRUE;
-	result = isc_socket_sendtov(query->sock, &query->sendlist,
-				    global_task, send_done, query,
-				    &query->sockaddr, NULL);
+	result = isc_socket_sendtov2(query->sock, &query->sendlist,
+				     global_task, send_done, query,
+				     &query->sockaddr, NULL,
+				     ISC_SOCKFLAG_NORETRY);
 	check_result(result, "isc_socket_sendtov");
 	sendcount++;
 }
@@ -2769,6 +2822,7 @@ static void
 launch_next_query(dig_query_t *query, isc_boolean_t include_question) {
 	isc_result_t result;
 	dig_lookup_t *l;
+	isc_buffer_t *buffer;
 
 	INSIST(!free_now);
 
@@ -2792,9 +2846,15 @@ launch_next_query(dig_query_t *query, isc_boolean_t include_question) {
 	isc_buffer_putuint16(&query->slbuf, (isc_uint16_t) query->sendbuf.used);
 	ISC_LIST_INIT(query->sendlist);
 	ISC_LINK_INIT(&query->slbuf, link);
-	ISC_LIST_ENQUEUE(query->sendlist, &query->slbuf, link);
-	if (include_question)
-		ISC_LIST_ENQUEUE(query->sendlist, &query->sendbuf, link);
+	if (!query->first_soa_rcvd) {
+		buffer = clone_buffer(&query->slbuf);
+		ISC_LIST_ENQUEUE(query->sendlist, buffer, link);
+		if (include_question) {
+			buffer = clone_buffer(&query->sendbuf);
+			ISC_LIST_ENQUEUE(query->sendlist, buffer, link);
+		}
+	}
+
 	ISC_LINK_INIT(&query->lengthbuf, link);
 	ISC_LIST_ENQUEUE(query->lengthlist, &query->lengthbuf, link);
 
@@ -2893,6 +2953,12 @@ connect_done(isc_task_t *task, isc_event_t *event) {
 			check_next_lookup(l);
 		UNLOCK_LOOKUP;
 		return;
+	}
+	if (keep_open) {
+		if (keep != NULL)
+			isc_socket_detach(&keep);
+		isc_socket_attach(query->sock, &keep);
+		keepaddr = query->sockaddr;
 	}
 	launch_next_query(query, ISC_TRUE);
 	isc_event_free(&event);
@@ -3401,7 +3467,7 @@ recv_done(isc_task_t *task, isc_event_t *event) {
 	}
 
 	if (!l->doing_xfr || l->xfr_q == query) {
-		if (msg->rcode != dns_rcode_noerror &&
+		if (msg->rcode == dns_rcode_nxdomain &&
 		    (l->origin != NULL || l->need_search)) {
 			if (!next_origin(query) || showsearch) {
 				printmessage(query, msg, ISC_TRUE);
@@ -3710,6 +3776,8 @@ destroy_libs(void) {
 	isc_result_t result;
 #endif
 
+	if (keep != NULL)
+		isc_socket_detach(&keep);
 	debug("destroy_libs()");
 	if (global_task != NULL) {
 		debug("freeing task");

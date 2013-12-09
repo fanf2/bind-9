@@ -71,7 +71,6 @@
 #define isc_mem_isovermem isc__mem_isovermem
 #define isc_mem_setname isc__mem_setname
 #define isc_mem_setwater isc__mem_setwater
-#define isc_mem_printactive isc__mem_printactive
 #define isc_mem_printallactive isc__mem_printallactive
 #define isc_mem_waterack isc__mem_waterack
 #define isc_mempool_create isc__mempool_create
@@ -152,8 +151,6 @@
 #define isc_taskmgr_setmode isc__taskmgr_setmode
 #define isc_taskmgr_mode isc__taskmgr_mode
 #define isc_taskmgr_destroy isc__taskmgr_destroy
-#define isc_taskmgr_setexcltask isc__taskmgr_setexcltask
-#define isc_taskmgr_excltask isc__taskmgr_excltask
 #define isc_task_beginexclusive isc__task_beginexclusive
 #define isc_task_endexclusive isc__task_endexclusive
 #define isc_task_setprivilege isc__task_setprivilege

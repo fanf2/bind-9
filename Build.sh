@@ -28,7 +28,7 @@ PATH_OpenSSL=/opt/OpenSSL-1.0.1e+0
 LDFLAGS="-Wl,-R$PATH_OpenSSL/lib"
 export LDFLAGS
 
-./configure --enable-threads --enable-newstats --enable-rrl --with-readline \
+./configure --enable-threads --with-readline \
 	--with-openssl=$PATH_OpenSSL --without-gost --without-gssapi \
 	--prefix=$PREFIX --mandir=$PREFIX/man \
 	--localstatedir=/spool/bind/var \

@@ -15,7 +15,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: named-checkzone.c,v 1.65 2011/12/22 17:29:22 each Exp $ */
+/* $Id: named-checkzone.c,v 1.65.32.2 2012/02/07 02:45:21 each Exp $ */
 
 /*! \file */
 
@@ -78,7 +78,7 @@ static void
 usage(void) {
 	fprintf(stderr,
 		"usage: %s [-djqvD] [-c class] "
-		"[-f inputformat] [-F outputformat] [-J journal] "
+		"[-f inputformat] [-F outputformat] [-J filename] "
 		"[-t directory] [-w directory] [-k (ignore|warn|fail)] "
 		"[-n (ignore|warn|fail)] [-m (ignore|warn|fail)] "
 		"[-r (ignore|warn|fail)] "
@@ -119,6 +119,11 @@ main(int argc, char **argv) {
 	isc_boolean_t logdump = ISC_FALSE;
 	FILE *errout = stdout;
 	char *endp;
+
+	/*
+	 * Uncomment the following line if memory debugging is needed:
+	 * isc_mem_debugging |= ISC_MEM_DEBUGRECORD;
+	 */
 
 	outputstyle = &dns_master_style_full;
 
@@ -438,6 +443,8 @@ main(int argc, char **argv) {
 			inputformat = dns_masterformat_raw;
 			fprintf(stderr,
 				"WARNING: input format raw, version ignored\n");
+		} else if (strcasecmp(inputformatstr, "map") == 0) {
+			inputformat = dns_masterformat_map;
 		} else {
 			fprintf(stderr, "unknown file format: %s\n",
 			    inputformatstr);
@@ -461,6 +468,8 @@ main(int argc, char **argv) {
 					"unknown raw format version\n");
 				exit(1);
 			}
+		} else if (strcasecmp(outputformatstr, "map") == 0) {
+			outputformat = dns_masterformat_map;
 		} else {
 			fprintf(stderr, "unknown file format: %s\n",
 				outputformatstr);

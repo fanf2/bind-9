@@ -78,6 +78,13 @@
 #include "errno2result.h"
 
 /*
+ * Set by the -T dscp option on the command line. If set to a value
+ * other than -1, we check to make sure DSCP values match it, and
+ * assert if not.
+ */
+int isc_dscp_check_value = -1;
+
+/*
  * How in the world can Microsoft exist with APIs like this?
  * We can't actually call this directly, because it turns out
  * no library exports this function.  Instead, we need to
@@ -1061,13 +1068,13 @@ destroy_socketevent(isc_event_t *event) {
 }
 
 static isc_socketevent_t *
-allocate_socketevent(isc_socket_t *sock, isc_eventtype_t eventtype,
-		     isc_taskaction_t action, const void *arg)
+allocate_socketevent(isc_mem_t *mctx, isc_socket_t *sock,
+		     isc_eventtype_t eventtype, isc_taskaction_t action,
+		     const void *arg)
 {
 	isc_socketevent_t *ev;
 
-	ev = (isc_socketevent_t *)isc_event_allocate(sock->manager->mctx,
-						     sock, eventtype,
+	ev = (isc_socketevent_t *)isc_event_allocate(mctx, sock, eventtype,
 						     action, arg,
 						     sizeof(*ev));
 	if (ev == NULL)
@@ -2662,7 +2669,7 @@ isc__socketmgr_create2(isc_mem_t *mctx, isc_socketmgr_t **managerp,
 }
 
 isc_result_t
-isc__socketmgr_getmaxsockets(isc_socketmgr_t *manager, unsigned int *nsockp) {
+isc_socketmgr_getmaxsockets(isc_socketmgr_t *manager, unsigned int *nsockp) {
 	REQUIRE(VALID_MANAGER(manager));
 	REQUIRE(nsockp != NULL);
 
@@ -2670,7 +2677,7 @@ isc__socketmgr_getmaxsockets(isc_socketmgr_t *manager, unsigned int *nsockp) {
 }
 
 void
-isc__socketmgr_setstats(isc_socketmgr_t *manager, isc_stats_t *stats) {
+isc_socketmgr_setstats(isc_socketmgr_t *manager, isc_stats_t *stats) {
 	REQUIRE(VALID_MANAGER(manager));
 	REQUIRE(ISC_LIST_EMPTY(manager->socklist));
 	REQUIRE(manager->stats == NULL);
@@ -2840,7 +2847,8 @@ isc__socket_recvv(isc_socket_t *sock, isc_bufferlist_t *buflist,
 
 	INSIST(sock->bound);
 
-	dev = allocate_socketevent(sock, ISC_SOCKEVENT_RECVDONE, action, arg);
+	dev = allocate_socketevent(manager->mctx, sock,
+				   ISC_SOCKEVENT_RECVDONE, action, arg);
 	if (dev == NULL) {
 		UNLOCK(&sock->lock);
 		return (ISC_R_NOMEMORY);
@@ -2901,7 +2909,8 @@ isc__socket_recv(isc_socket_t *sock, isc_region_t *region,
 
 	INSIST(sock->bound);
 
-	dev = allocate_socketevent(sock, ISC_SOCKEVENT_RECVDONE, action, arg);
+	dev = allocate_socketevent(manager->mctx, sock,
+				   ISC_SOCKEVENT_RECVDONE, action, arg);
 	if (dev == NULL) {
 		UNLOCK(&sock->lock);
 		return (ISC_R_NOMEMORY);
@@ -3064,7 +3073,8 @@ isc__socket_sendto(isc_socket_t *sock, isc_region_t *region,
 
 	INSIST(sock->bound);
 
-	dev = allocate_socketevent(sock, ISC_SOCKEVENT_SENDDONE, action, arg);
+	dev = allocate_socketevent(manager->mctx, sock,
+				   ISC_SOCKEVENT_SENDDONE, action, arg);
 	if (dev == NULL) {
 		UNLOCK(&sock->lock);
 		return (ISC_R_NOMEMORY);
@@ -3080,14 +3090,24 @@ isc_result_t
 isc__socket_sendv(isc_socket_t *sock, isc_bufferlist_t *buflist,
 		  isc_task_t *task, isc_taskaction_t action, const void *arg)
 {
-	return (isc_socket_sendtov(sock, buflist, task, action, arg, NULL,
-				   NULL));
+	return (isc_socket_sendtov2(sock, buflist, task, action, arg, NULL,
+				    NULL, 0));
 }
 
 isc_result_t
 isc__socket_sendtov(isc_socket_t *sock, isc_bufferlist_t *buflist,
 		    isc_task_t *task, isc_taskaction_t action, const void *arg,
 		    isc_sockaddr_t *address, struct in6_pktinfo *pktinfo)
+{
+	return (isc_socket_sendtov2(sock, buflist, task, action, arg, address,
+				    pktinfo, 0));
+}
+
+isc_result_t
+isc__socket_sendtov2(isc_socket_t *sock, isc_bufferlist_t *buflist,
+		     isc_task_t *task, isc_taskaction_t action, const void *arg,
+		     isc_sockaddr_t *address, struct in6_pktinfo *pktinfo,
+		     unsigned int flags)
 {
 	isc_socketevent_t *dev;
 	isc_socketmgr_t *manager;
@@ -3118,7 +3138,8 @@ isc__socket_sendtov(isc_socket_t *sock, isc_bufferlist_t *buflist,
 	iocount = isc_bufferlist_usedcount(buflist);
 	REQUIRE(iocount > 0);
 
-	dev = allocate_socketevent(sock, ISC_SOCKEVENT_SENDDONE, action, arg);
+	dev = allocate_socketevent(manager->mctx, sock,
+				   ISC_SOCKEVENT_SENDDONE, action, arg);
 	if (dev == NULL) {
 		UNLOCK(&sock->lock);
 		return (ISC_R_NOMEMORY);
@@ -3134,7 +3155,7 @@ isc__socket_sendtov(isc_socket_t *sock, isc_bufferlist_t *buflist,
 		buffer = ISC_LIST_HEAD(*buflist);
 	}
 
-	ret = socket_send(sock, dev, task, address, pktinfo, 0);
+	ret = socket_send(sock, dev, task, address, pktinfo, flags);
 	UNLOCK(&sock->lock);
 	return (ret);
 }
@@ -3804,6 +3825,34 @@ isc__socket_ipv6only(isc_socket_t *sock, isc_boolean_t yes) {
 }
 
 void
+isc__socket_dscp(isc_socket_t *sock, isc_dscp_t dscp) {
+#if !defined(IP_TOS) && !defined(IPV6_TCLASS)
+	UNUSED(dscp);
+#else
+	if (dscp < 0)
+		return;
+
+	dscp <<= 2;
+	dscp &= 0xff;
+#endif
+
+	REQUIRE(VALID_SOCKET(sock));
+
+#ifdef IP_TOS
+	if (sock->pf == AF_INET) {
+		(void)setsockopt(sock->fd, IPPROTO_IP, IP_TOS,
+				 (char *)&dscp, sizeof(dscp));
+	}
+#endif
+#ifdef IPV6_TCLASS
+	if (sock->pf == AF_INET6) {
+		(void)setsockopt(sock->fd, IPPROTO_IPV6, IPV6_TCLASS,
+				 (char *)&dscp, sizeof(dscp));
+	}
+#endif
+}
+
+void
 isc__socket_cleanunix(isc_sockaddr_t *addr, isc_boolean_t active) {
 	UNUSED(addr);
 	UNUSED(active);
@@ -3864,11 +3913,18 @@ isc___socketmgr_maxudp(isc_socketmgr_t *manager, int maxudp) {
 	UNUSED(maxudp);
 }
 
+isc_socketevent_t *
+isc_socket_socketevent(isc_mem_t *mctx, void *sender,
+		       isc_eventtype_t eventtype, isc_taskaction_t action,
+		       const void *arg)
+{
+	return (allocate_socketevent(mctx, sender, eventtype, action, arg));
+}
+
 #ifdef HAVE_LIBXML2
 
 static const char *
-_socktype(isc_sockettype_t type)
-{
+_socktype(isc_sockettype_t type) {
 	if (type == isc_sockettype_udp)
 		return ("udp");
 	else if (type == isc_sockettype_tcp)
@@ -3990,3 +4046,5 @@ error:
 	return (xmlrc);
 }
 #endif /* HAVE_LIBXML2 */
+
+#include "../socket_api.c"

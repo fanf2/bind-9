@@ -4,9 +4,9 @@ See COPYRIGHT in the source root or http://isc.org/copyright.html for terms.
 
 $Id$
 
-       BIND 9.9 for Win32 Source Build Instructions.  24-June-2013
+       BIND 9.10 for Win32 Source Build Instructions.  24-June-2013
 
-Building BIND 9.9 on Windows XP/Vista/7/8 or server 2003/2008/2008R2
+Building BIND 9.10 on Windows XP/Vista/7/8 or server 2003/2008/2008R2
 has the following prerequisites:
 
 1) You need to install Perl for Windows.  ActivePerl
@@ -61,7 +61,7 @@ Step 1: Download and build OpenSSL
 
 Download and untar the OpenSSL sources from http://www.openssl.org/.
 Extract them at in the same directory in which you extracted the BIND9
-source:  If BIND9 is in \build\bind-9.9.0, for instance, OpenSSL should be
+source:  If BIND9 is in \build\bind-9.10.0, for instance, OpenSSL should be
 in \build\openssl-1.0.1e (subject to version number changes).
 
 Note: Building OpenSSL requires that you install Perl as it uses
@@ -85,7 +85,7 @@ Step 2: Download and build libxml2
 
 Download and untar the libxml2 sources from ftp://xmlsoft.org/libxml2.
 Extract them at in the same directory in which you extracted the BIND9
-source:  If BIND9 is in \build\bind-9.9.0, for instance, libxml2 should
+source:  If BIND9 is in \build\bind-9.10.0, for instance, libxml2 should
 be in \build\libxml2-2.7.7 (subject to version number changes).
 
 Now build libxml2, and copy the resulting files into the include and lib
@@ -102,7 +102,7 @@ You must build openssl and libxml2 first.
 From the command prompt cd to the win32utils directory under
 the BIND9 root:
 
-  cd bind-9.9.0\win32utils
+  cd bind-9.10.0\win32utils
 
 Text files used by the Windows build should be in DOS format.
 If for some reason they aren't, this can be corrected by running:

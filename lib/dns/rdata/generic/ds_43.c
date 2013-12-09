@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2005, 2007, 2009-2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -17,7 +17,7 @@
 
 /* $Id$ */
 
-/* draft-ietf-dnsext-delegation-signer-05.txt */
+/* RFC3658 */
 
 #ifndef RDATA_GENERIC_DS_43_C
 #define RDATA_GENERIC_DS_43_C
@@ -64,12 +64,10 @@ fromtext_ds(ARGS_FROMTEXT) {
 	/*
 	 * Digest type.
 	 */
-	RETERR(isc_lex_getmastertoken(lexer, &token, isc_tokentype_number,
+	RETERR(isc_lex_getmastertoken(lexer, &token, isc_tokentype_string,
 				      ISC_FALSE));
-	if (token.value.as_ulong > 0xffU)
-		RETTOK(ISC_R_RANGE);
-	RETERR(uint8_tobuffer(token.value.as_ulong, target));
-	c = (unsigned char) token.value.as_ulong;
+	RETTOK(dns_dsdigest_fromtext(&c, &token.value.as_textregion));
+	RETERR(mem_tobuffer(target, &c, 1));
 
 	/*
 	 * Digest.
@@ -137,11 +135,14 @@ totext_ds(ARGS_TOTEXT) {
 	if ((tctx->flags & DNS_STYLEFLAG_MULTILINE) != 0)
 		RETERR(str_totext(" (", target));
 	RETERR(str_totext(tctx->linebreak, target));
-	if (tctx->width == 0) /* No splitting */
-		RETERR(isc_hex_totext(&sr, 0, "", target));
-	else
-		RETERR(isc_hex_totext(&sr, tctx->width - 2,
-				      tctx->linebreak, target));
+	if ((tctx->flags & DNS_STYLEFLAG_NOCRYPTO) == 0) {
+		if (tctx->width == 0) /* No splitting */
+			RETERR(isc_hex_totext(&sr, 0, "", target));
+		else
+			RETERR(isc_hex_totext(&sr, tctx->width - 2,
+					      tctx->linebreak, target));
+	} else
+		RETERR(str_totext("[omitted]", target));
 	if ((tctx->flags & DNS_STYLEFLAG_MULTILINE) != 0)
 		RETERR(str_totext(" )", target));
 	return (ISC_R_SUCCESS);

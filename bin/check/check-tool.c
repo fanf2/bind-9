@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2000-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -609,7 +609,8 @@ load_zone(isc_mem_t *mctx, const char *zonename, const char *filename,
 	CHECK(dns_zone_setorigin(zone, origin));
 	CHECK(dns_zone_setdbtype(zone, 1, (const char * const *) dbtype));
 	CHECK(dns_zone_setfile2(zone, filename, fileformat));
-	CHECK(dns_zone_setjournal(zone, journal));
+	if (journal != NULL)
+		CHECK(dns_zone_setjournal(zone, journal));
 
 	DE_CONST(classname, region.base);
 	region.length = strlen(classname);

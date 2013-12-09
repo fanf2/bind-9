@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006, 2008-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2006, 2008-2013  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -300,7 +300,6 @@ do_one_tuple(dns_difftuple_t **tuple, dns_db_t *db, dns_dbversion_t *ver,
 	 * Create a singleton diff.
 	 */
 	dns_diff_init(diff->mctx, &temp_diff);
-	temp_diff.resign = diff->resign;
 	ISC_LIST_APPEND(temp_diff.tuples, *tuple, link);
 
 	/*
@@ -968,7 +967,6 @@ dns_nsec3param_toprivate(dns_rdata_t *src, dns_rdata_t *target,
 	ISC_LINK_INIT(target, link);
 }
 
-#ifdef BIND9
 static isc_result_t
 rr_exists(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	  const dns_rdata_t *rdata, isc_boolean_t *flag)
@@ -1011,9 +1009,7 @@ rr_exists(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 		dns_db_detachnode(db, &node);
 	return (result);
 }
-#endif
 
-#ifdef BIND9
 isc_result_t
 dns_nsec3param_deletechains(dns_db_t *db, dns_dbversion_t *ver,
 			    dns_zone_t *zone, isc_boolean_t nonsec,
@@ -1138,7 +1134,6 @@ dns_nsec3param_deletechains(dns_db_t *db, dns_dbversion_t *ver,
 	dns_db_detachnode(db, &node);
 	return (result);
 }
-#endif
 
 isc_result_t
 dns_nsec3_addnsec3sx(dns_db_t *db, dns_dbversion_t *version,

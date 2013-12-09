@@ -223,6 +223,10 @@ SOURCE=..\include\isc\base64.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\include\isc\bind9.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\include\isc\bind_registry.h
 # End Source File
 # Begin Source File
@@ -256,6 +260,10 @@ SOURCE=.\include\isc\condition.h
 # Begin Source File
 
 SOURCE=..\..\..\config.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\include\isc\crc64.h
 # End Source File
 # Begin Source File
 
@@ -611,6 +619,10 @@ SOURCE=..\base64.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\bind9.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\bitstring.c
 # End Source File
 # Begin Source File
@@ -624,6 +636,10 @@ SOURCE=..\bufferlist.c
 # Begin Source File
 
 SOURCE=..\commandline.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\crc64.c
 # End Source File
 # Begin Source File
 
