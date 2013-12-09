@@ -24,6 +24,8 @@ echo ==
 
 PATH_OpenSSL=/opt/OpenSSL-1.0.1e+0
 
+export PYTHON=/opt/python-3.3.3+0/bin/python3.3
+
 # Tell the configure script to link with the correct OpenSSL
 LDFLAGS="-Wl,-R$PATH_OpenSSL/lib"
 export LDFLAGS
