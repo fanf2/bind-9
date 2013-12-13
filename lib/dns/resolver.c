@@ -3740,6 +3740,8 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 			fctx->fwdpolicy = forwarders->fwdpolicy;
 
 		if (fctx->fwdpolicy != dns_fwdpolicy_only) {
+			dns_name_t suffix;
+
 			/*
 			 * The caller didn't supply a query domain and
 			 * nameservers, and we're not in forward-only mode,
@@ -3753,7 +3755,20 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 						      NULL);
 			if (result != ISC_R_SUCCESS)
 				goto cleanup_name;
+
+			/* Look for DS records in the parent. */
+			if (dns_rdatatype_atparent(fctx->type) &&
+			    dns_name_countlabels(domain) > 1)
+			{
+				unsigned int labels;
+				dns_name_init(&suffix, NULL);
+				labels = dns_name_countlabels(domain);
+				dns_name_getlabelsequence(domain, 1,
+							  labels - 1, &suffix);
+				domain = &suffix;
+			}
 			result = dns_name_dup(domain, mctx, &fctx->domain);
+
 			if (result != ISC_R_SUCCESS) {
 				dns_rdataset_disassociate(&fctx->nameservers);
 				goto cleanup_name;
@@ -7481,9 +7496,12 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 		 * NXDOMAIN, NXRDATASET, or referral.
 		 */
 		result = noanswer_response(fctx, NULL, 0);
-		if (result == DNS_R_CHASEDSSERVERS) {
-		} else if (result == DNS_R_DELEGATION) {
-		force_referral:
+		switch (result) {
+		case ISC_R_SUCCESS:
+		case DNS_R_CHASEDSSERVERS:
+			break;
+		case DNS_R_DELEGATION:
+ force_referral:
 			/*
 			 * We don't have the answer, but we know a better
 			 * place to look.
@@ -7508,7 +7526,8 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
 			fctx->adberr = 0;
 
 			result = ISC_R_SUCCESS;
-		} else if (result != ISC_R_SUCCESS) {
+			break;
+		default:
 			/*
 			 * Something has gone wrong.
 			 */
