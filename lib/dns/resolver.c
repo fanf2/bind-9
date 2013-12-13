@@ -3757,7 +3757,7 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 				goto cleanup_name;
 
 			/* Look for DS records in the parent. */
-			if (rdns_rdatatype_atparent(fctx->type) &&
+			if (dns_rdatatype_atparent(fctx->type) &&
 			    dns_name_countlabels(domain) > 1)
 			{
 				unsigned int labels;
