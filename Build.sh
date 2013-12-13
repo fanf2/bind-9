@@ -36,21 +36,16 @@ export LDFLAGS
 	--localstatedir=/spool/bind/var \
 	--sysconfdir=/spool/bind/etc
 
-perl -pi -e 's#define HAVE_REGEX_H 1#undef HAVE_REGEX_H#' config.h
-
-make -j3
-
 # suppress attempt to create $sysconfdir
 touch installdirs
 
 mkdir -p $PREFIX/bin $PREFIX/doc
 ln -s bin $PREFIX/sbin
+cp ../nsdiff/nsdiff $PREFIX/bin
 cp doc/arm/*.html doc/arm/Bv9ARM.pdf $PREFIX/doc
 
-make install
-
-cd $PREFIX/man
-ln -s man[158]/* .
+make -j3 all
+make -j3 install
 
 echo ==
 echo ==  $(date +%Y-%m-%d.%H:%M:%S%z) $PREFIX done
