@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2011-2013  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2011-2014  Internet Systems Consortium, Inc. ("ISC")
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -20,16 +20,30 @@ SYSTEMTESTTOP=..
 . $SYSTEMTESTTOP/conf.sh
 
 DIGOPTS="+tcp +dnssec"
-RANDFILE=random.data
 
 status=0
 n=0
 
-$RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 signing -nsec3param 1 0 0 - nsec3
+$RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 signing -nsec3param 1 0 0 - nsec3 > /dev/null 2>&1
 
 for i in 1 2 3 4 5 6 7 8 9 0
 do
 	nsec3param=`$DIG +short @10.53.0.3 -p 5300 nsec3param nsec3.`
+	test -n "$nsec3param" && break
+	sleep 1
+done
+
+# Loop until retransfer3 has been transferred.
+for i in 1 2 3 4 5 6 7 8 9 0
+do
+        ans=0
+        $RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 signing -nsec3param 1 0 0 - retransfer3 > /dev/null 2>&1 || ans=1
+	[ $ans = 0 ] && break
+done
+
+for i in 1 2 3 4 5 6 7 8 9 0
+do
+	nsec3param=`$DIG +short @10.53.0.3 -p 5300 nsec3param retransfer3.`
 	test -n "$nsec3param" && break
 	sleep 1
 done
@@ -608,8 +622,8 @@ grep "ANSWER: 1," dig.out.ns5.test$n > /dev/null || ret=1
 if [ $ret != 0 ]; then echo "I:setup broken"; fi
 status=`expr $status + $ret`
 cp ns5/named.conf.post ns5/named.conf
-(cd ns5; $KEYGEN -q -r ../$RANDFILE bits) > /dev/null 2>&1
-(cd ns5; $KEYGEN -q -r ../$RANDFILE -f KSK bits) > /dev/null 2>&1
+(cd ns5; $KEYGEN -q -r $RANDFILE bits) > /dev/null 2>&1
+(cd ns5; $KEYGEN -q -r $RANDFILE -f KSK bits) > /dev/null 2>&1
 $RNDC -c ../common/rndc.conf -s 10.53.0.5 -p 9953 reload 2>&1 | sed 's/^/I:ns5 /'
 for i in 1 2 3 4 5 6 7 8 9 10
 do
@@ -761,6 +775,32 @@ n=`expr $n + 1`
 if [ $ret != 0 ]; then echo "I:failed"; fi
 status=`expr $status + $ret`
 
+echo "I:check rndc retransfer of a inline nsec3 slave retains nsec3 ($n)"
+ret=0
+for i in 0 1 2 3 4 5 6 7 8 9
+do
+	ans=0
+	$DIG $DIGOPTS @10.53.0.3 -p 5300 nonexist.retransfer3 A > dig.out.ns3.pre.test$n
+	grep "status: NXDOMAIN" dig.out.ns3.pre.test$n > /dev/null || ans=1
+	grep "NSEC3" dig.out.ns3.pre.test$n > /dev/null || ans=1
+	[ $ans = 0 ] && break
+	sleep 1
+done
+$RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 retransfer retransfer3 2>&1 || ret=1
+for i in 0 1 2 3 4 5 6 7 8 9
+do
+	ans=0
+	$DIG $DIGOPTS @10.53.0.3 -p 5300 nonexist.retransfer3 A > dig.out.ns3.post.test$n
+	grep "status: NXDOMAIN" dig.out.ns3.post.test$n > /dev/null || ans=1
+	grep "NSEC3" dig.out.ns3.post.test$n > /dev/null || ans=1
+	[ $ans = 0 ] && break
+	sleep 1
+done
+[ $ans = 1 ] && ret=1
+n=`expr $n + 1`
+if [ $ret != 0 ]; then echo "I:failed"; fi
+status=`expr $status + $ret`
+
 n=`expr $n + 1`
 echo "I:stop bump in the wire signer server ($n)"
 ret=0
@@ -806,7 +846,7 @@ $DIG $DIGOPTS @10.53.0.2 -p 5300 test-$zone SOA > dig.out.ns2.$zone.test$n
 grep "status: NOERROR," dig.out.ns2.$zone.test$n  > /dev/null || { ret=1; cat dig.out.ns2.$zone.test$n; }
 $RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 addzone test-$zone \
 	'{ type slave; masters { 10.53.0.2; }; file "'test-$zone.bk'"; inline-signing yes; auto-dnssec maintain; allow-transfer { any; }; };'
-$RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 delzone test-$zone
+$RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 delzone test-$zone > /dev/null 2>&1
 done
 
 n=`expr $n + 1`
@@ -815,22 +855,9 @@ ret=0
 $DIG $DIGOPTS @10.53.0.3 -p 5300 dnskey externalkey > dig.out.ns3.test$n
 for alg in 3 7 12 13
 do
-   if test $alg = 3
-   then
-	sh checkdsa.sh 2>/dev/null || continue;
-   fi
-   if test $alg = 12 
-   then
-	sh ../gost/prereq.sh 2>/dev/null || continue;
-   fi
-   if test $alg = 13 
-   then
-	sh ../ecdsa/prereq.sh 2>/dev/null || continue;
-	# dsa and ecdsa both require a source of randomness when
-	# generating signatures
-	sh checkdsa.sh 2>/dev/null || continue;
-   fi
-   test $alg = 3 -a ! -r /dev/random -a ! -r /dev/urandom && continue
+   [ $alg = 3 -a ! -f checkdsa ] && continue;
+   [ $alg = 12 -a ! -f checkgost ] && continue;
+   [ $alg = 13 -a ! -f checkecdsa ] && continue;
 
    case $alg in
    3) echo "I: checking DSA";;

@@ -1,3 +1,206 @@
+	--- 9.10.0a2 released ---
+
+3724.	[bug]		win32: Fixed a bug that prevented dig and
+			host from exiting properly after completing
+			a UDP query. [RT #35288]
+
+3723.	[cleanup]	Imported keys are now handled the same way
+			regardless of DNSSEC algorithm. [RT #35215]
+
+3722.	[bug]		Using geoip ACLs in a blackhole statement
+			could cause a segfault. [RT #35272]
+
+3721.	[doc]		Improved documentation of the EDNS processing
+			enhancements introduced in change #3593. [RT #35275]
+
+3720.	[bug]		Address compiler warnings. [RT #35261]
+
+3719.	[bug]		Address memory leak in in peer.c. [RT #35255]
+
+3718.	[bug]		A missing ISC_LINK_INIT in log.c. [RT #35260]
+
+3717.	[port]		hpux: Treat EOPNOTSUPP as a expected error code when
+			probing to see if it is possible to set dscp values
+			on a per packet basis. [RT #35252]
+
+3716.	[bug]		The dns_request code was setting dcsp values when not
+			requested.  [RT #35252]
+
+3715.	[bug]		The region and city databases could fail to
+			initialize when using some versions of libGeoIP,
+			causing assertion failures when named was
+			configured to use them. [RT #35427]
+
+3714.	[test]		System tests that need to test for cryptography
+			support before running can now use a common
+			"testcrypto.sh" script to do so. [RT #35213]
+
+3713.	[bug]		Save memory by not storing "also-notify" addresses
+			in zone objects that are configured not to send
+			notify requests. [RT #35195]
+
+3712.	[placeholder]
+
+3711.	[placeholder]
+
+3710.	[bug]		Address double dns_zone_detach when switching to
+			using automatic empty zones from regular zones.
+			[RT #35177]
+
+3709.	[port]		Use built-in versions of strptime() and timegm()
+			on all platforms to avoid portability issues.
+			[RT #35183]
+
+3708.	[bug]		Address a portentry locking issue in dispatch.c.
+			[RT #35128]
+
+3707.	[bug]		irs_resconf_load now returns ISC_R_FILENOTFOUND
+			on a missing resolv.conf file and initializes the
+			structure as if it had been configured with:
+
+				nameserver ::1
+				nameserver 127.0.0.1
+
+			Note: Callers will need to be updated to treat
+			ISC_R_FILENOTFOUND as a qualified success or else
+			they will leak memory. The following code fragment
+			will work with both old and new versions without
+			changing the behaviour of the existing code.
+
+			resconf = NULL;
+			result = irs_resconf_load(mctx, "/etc/resolv.conf",
+						  &resconf);
+			if (result != ISC_SUCCESS) {
+				if (resconf != NULL)
+					irs_resconf_destroy(&resconf);
+				....
+			}
+
+			[RT #35194]
+
+3706.	[contrib]	queryperf: Fixed a possible integer overflow when
+			printing results. [RT #35182]
+
+3705.	[func]		"configure --enable-native-pkcs11" enables BIND
+			to use the PKCS#11 API for all cryptographic
+			functions, so that it can drive a hardware service
+			module directly without the need to use a modified
+			OpenSSL as intermediary (so long as the HSM's vendor
+			provides a complete-enough implementation of the
+			PKCS#11 interface). This has been tested successfully
+			with the Thales nShield HSM and with SoftHSMv2 from
+			the OpenDNSSEC project. [RT #29031]
+
+3704.	[protocol]	Accept integer timestamps in RRSIG records. [RT #35185]
+
+3703.	[func]		To improve recursive resolver performance, cache
+			records which are still being requested by clients
+			can now be automatically refreshed from the
+			authoritative server before they expire, reducing
+			or eliminating the time window in which no answer
+			is available in the cache. See the "prefetch" option
+			for more details. [RT #35041]
+
+3702.	[func]		'dnssec-coverage -l' option specifies a length
+			of time to check for coverage; events further into
+			the future are ignored.  'dnssec-coverage -z'
+			checks only ZSK events, and 'dnssec-coverage -k'
+			checks only KSK events.  (Thanks to Peter Palfrader.)
+			[RT #35168]
+
+3701.	[func]		named-checkconf can now obscure shared secrets
+			when printing by specifying '-x'. [RT #34465]
+
+3700.	[func]		Allow access to subgroups of XML statistics via
+			special URLs http://<server>:<port>/xml/v3/server,
+			/zones, /net, /tasks, /mem, and /status.  [RT #35115]
+
+3699.	[bug]		Improvements to statistics channel XSL stylesheet:
+			the stylesheet can now be cached by the browser;
+			section headers are omitted from the stats display
+			when there is no data in those sections to be
+			displayed; counters are now right-justified for
+			easier readability. [RT #35117]
+
+3698.	[cleanup]	Replaced all uses of memcpy() with memmove().
+			[RT #35120]
+
+3697.	[bug]		Handle "." as a search list element when IDN support
+			is enabled. [RT #35133]
+
+3696.	[bug]		dig failed to handle AXFR style IXFR responses which
+			span multiple messages. [RT #35137]
+
+3695.	[bug]		Address a possible race in dispatch.c. [RT #35107]
+
+3694.	[bug]		Warn when a key-directory is configured for a zone,
+			but does not exist or is not a directory. [RT #35108]
+
+3693.	[security]	memcpy was incorrectly called with overlapping
+			ranges resulting in malformed names being generated
+			on some platforms.  This could cause INSIST failures
+			when serving NSEC3 signed zones (CVE-2014-0591).
+			[RT #35120]
+
+3692.	[bug]		Two calls to dns_db_getoriginnode were fatal if there
+			was no data at the node. [RT #35080]
+
+3691.	[contrib]	Address null pointer dereference in LDAP and
+			MySQL DLZ modules.
+
+3690.	[bug]		Iterative responses could be missed when the source
+			port for an upstream query was the same as the
+			listener port (53). [RT #34925]
+
+3689.	[bug]		Fixed a bug causing an insecure delegation from one
+			static-stub zone to another to fail with a broken
+			trust chain. [RT #35081]
+
+3688.	[bug]		loadnode could return a freed node on out of memory.
+			[RT #35106]
+
+3687.	[bug]		Address null pointer dereference in zone_xfrdone.
+			[RT #35042]
+
+3686.	[func]		"dnssec-signzone -Q" drops signatures from keys
+			that are still published but no longer active.
+			[RT #34990]
+
+3685.	[bug]		"rndc refresh" didn't work correctly with slave
+			zones using inline-signing. [RT #35105]
+
+3684.	[bug]		The list of included files would grow on reload.
+			[RT 35090]
+
+3683.	[cleanup]	Add a more detailed "not found" message to rndc
+			commands which specify a zone name. [RT #35059]
+
+3682.	[bug]		Correct the behavior of rndc retransfer to allow
+			inline-signing slave zones to retain NSEC3 parameters
+			instead of reverting to NSEC. [RT #34745]
+
+3681.	[port]		Update the Windows build system to support feature
+			selection and WIN64 builds.  This is a work in
+			progress. [RT #34160]
+
+3680.	[bug]		Ensure buffer space is available in "rndc zonestatus".
+			[RT #35084]
+
+3679.	[bug]		dig could fail to clean up TCP sockets still
+			waiting on connect(). [RT #35074]
+
+3678.	[port]		Update config.guess and config.sub. [RT #35060]
+
+3677.	[bug]		'nsupdate' leaked memory if 'realm' was used multiple
+			times.  [RT #35073]
+
+3676.	[bug]		"named-checkconf -z" now checks zones of type
+			hint and redirect as well as master. [RT #35046]
+
+3675.	[misc]		Provide a place for third parties to add version
+			information for their extensions in the version
+			file by setting the EXTENSIONS variable.
+
 	--- 9.10.0a1 released ---
 
 3674.	[bug]		RPZ zeroed ttls if the query type was '*'. [RT #35026]
@@ -55,8 +258,10 @@
 3657.	[port]		Some readline clones don't accept NULL pointers when
 			calling add_history. [RT #34842]
 
-3656.	[bug]		Treat an all zero netmask as invalid when generating
-			the localnets acl. [RT #34687]
+3656.	[security]	Treat an all zero netmask as invalid when generating
+			the localnets acl. (The prior behavior could
+			allow unexpected matches when using some versions
+			of Winsock: CVE-2013-6320.) [RT #34687]
 
 3655.	[cleanup]	Simplify TCP message processing when requesting a
 			zone transfer.  [RT #34825]

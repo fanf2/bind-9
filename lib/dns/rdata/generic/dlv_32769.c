@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2006, 2007, 2009-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2006, 2007, 2009-2014  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -27,6 +27,8 @@
 #include <isc/sha2.h>
 
 #include <dns/ds.h>
+
+#include "dst_gost.h"
 
 static inline isc_result_t
 fromtext_dlv(ARGS_FROMTEXT) {
@@ -80,9 +82,11 @@ fromtext_dlv(ARGS_FROMTEXT) {
 	case DNS_DSDIGEST_SHA256:
 		length = ISC_SHA256_DIGESTLENGTH;
 		break;
+#ifdef ISC_GOST_DIGESTLENGTH
 	case DNS_DSDIGEST_GOST:
 		length = ISC_GOST_DIGESTLENGTH;
 		break;
+#endif
 	case DNS_DSDIGEST_SHA384:
 		length = ISC_SHA384_DIGESTLENGTH;
 		break;
@@ -170,8 +174,10 @@ fromwire_dlv(ARGS_FROMWIRE) {
 	     sr.length < 4 + ISC_SHA1_DIGESTLENGTH) ||
 	    (sr.base[3] == DNS_DSDIGEST_SHA256 &&
 	     sr.length < 4 + ISC_SHA256_DIGESTLENGTH) ||
+#ifdef ISC_GOST_DIGESTLENGTH
 	    (sr.base[3] == DNS_DSDIGEST_GOST &&
 	     sr.length < 4 + ISC_GOST_DIGESTLENGTH) ||
+#endif
 	    (sr.base[3] == DNS_DSDIGEST_SHA384 &&
 	     sr.length < 4 + ISC_SHA384_DIGESTLENGTH))
 		return (ISC_R_UNEXPECTEDEND);
@@ -185,8 +191,10 @@ fromwire_dlv(ARGS_FROMWIRE) {
 		sr.length = 4 + ISC_SHA1_DIGESTLENGTH;
 	else if (sr.base[3] == DNS_DSDIGEST_SHA256)
 		sr.length = 4 + ISC_SHA256_DIGESTLENGTH;
+#ifdef ISC_GOST_DIGESTLENGTH
 	else if (sr.base[3] == DNS_DSDIGEST_GOST)
 		sr.length = 4 + ISC_GOST_DIGESTLENGTH;
+#endif
 	else if (sr.base[3] == DNS_DSDIGEST_SHA384)
 		sr.length = 4 + ISC_SHA384_DIGESTLENGTH;
 
@@ -238,9 +246,11 @@ fromstruct_dlv(ARGS_FROMSTRUCT) {
 	case DNS_DSDIGEST_SHA256:
 		REQUIRE(dlv->length == ISC_SHA256_DIGESTLENGTH);
 		break;
+#ifdef ISC_GOST_DIGESTLENGTH
 	case DNS_DSDIGEST_GOST:
 		REQUIRE(dlv->length == ISC_GOST_DIGESTLENGTH);
 		break;
+#endif
 	case DNS_DSDIGEST_SHA384:
 		REQUIRE(dlv->length == ISC_SHA384_DIGESTLENGTH);
 		break;

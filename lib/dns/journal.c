@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2011, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2005, 2007-2011, 2013, 2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -357,7 +357,7 @@ journal_pos_encode(journal_rawpos_t *raw, journal_pos_t *cooked) {
 static void
 journal_header_decode(journal_rawheader_t *raw, journal_header_t *cooked) {
 	INSIST(sizeof(cooked->format) == sizeof(raw->h.format));
-	memcpy(cooked->format, raw->h.format, sizeof(cooked->format));
+	memmove(cooked->format, raw->h.format, sizeof(cooked->format));
 	journal_pos_decode(&raw->h.begin, &cooked->begin);
 	journal_pos_decode(&raw->h.end, &cooked->end);
 	cooked->index_size = decode_uint32(raw->h.index_size);
@@ -371,7 +371,7 @@ journal_header_encode(journal_header_t *cooked, journal_rawheader_t *raw) {
 
 	INSIST(sizeof(cooked->format) == sizeof(raw->h.format));
 	memset(raw->pad, 0, sizeof(raw->pad));
-	memcpy(raw->h.format, cooked->format, sizeof(raw->h.format));
+	memmove(raw->h.format, cooked->format, sizeof(raw->h.format));
 	journal_pos_encode(&raw->h.begin, &cooked->begin);
 	journal_pos_encode(&raw->h.end, &cooked->end);
 	encode_uint32(cooked->index_size, raw->h.index_size);
@@ -412,7 +412,7 @@ journal_read(dns_journal_t *j, void *mem, size_t nbytes) {
 			      j->filename, isc_result_totext(result));
 		return (ISC_R_UNEXPECTED);
 	}
-	j->offset += nbytes;
+	j->offset += (isc_offset_t)nbytes;
 	return (ISC_R_SUCCESS);
 }
 
@@ -427,7 +427,7 @@ journal_write(dns_journal_t *j, void *mem, size_t nbytes) {
 			      j->filename, isc_result_totext(result));
 		return (ISC_R_UNEXPECTED);
 	}
-	j->offset += nbytes;
+	j->offset += (isc_offset_t)nbytes;
 	return (ISC_R_SUCCESS);
 }
 
@@ -529,7 +529,7 @@ journal_file_create(isc_mem_t *mctx, const char *filename) {
 		return (ISC_R_NOMEMORY);
 	}
 	memset(mem, 0, size);
-	memcpy(mem, &rawheader, sizeof(rawheader));
+	memmove(mem, &rawheader, sizeof(rawheader));
 
 	result = isc_stdio_write(mem, 1, (size_t) size, fp, NULL);
 	if (result != ISC_R_SUCCESS) {
@@ -695,7 +695,7 @@ dns_journal_open(isc_mem_t *mctx, const char *filename, unsigned int mode,
 		 dns_journal_t **journalp)
 {
 	isc_result_t result;
-	int namelen;
+	size_t namelen;
 	char backup[1024];
 	isc_boolean_t write, create;
 
@@ -705,11 +705,11 @@ dns_journal_open(isc_mem_t *mctx, const char *filename, unsigned int mode,
 	result = journal_open(mctx, filename, write, create, journalp);
 	if (result == ISC_R_NOTFOUND) {
 		namelen = strlen(filename);
-		if (namelen > 4 && strcmp(filename + namelen - 4, ".jnl") == 0)
+		if (namelen > 4U && strcmp(filename + namelen - 4, ".jnl") == 0)
 			namelen -= 4;
 
 		result = isc_string_printf(backup, sizeof(backup), "%.*s.jbk",
-					   namelen, filename);
+					   (int)namelen, filename);
 		if (result != ISC_R_SUCCESS)
 			return (result);
 		result = journal_open(mctx, backup, write, write, journalp);
@@ -2090,7 +2090,7 @@ dns_journal_compact(isc_mem_t *mctx, char *filename, isc_uint32_t serial,
 	dns_journal_t *new = NULL;
 	journal_rawheader_t rawheader;
 	unsigned int copy_length;
-	int namelen;
+	size_t namelen;
 	char *buf = NULL;
 	unsigned int size = 0;
 	isc_result_t result;
@@ -2100,16 +2100,16 @@ dns_journal_compact(isc_mem_t *mctx, char *filename, isc_uint32_t serial,
 	isc_boolean_t is_backup = ISC_FALSE;
 
 	namelen = strlen(filename);
-	if (namelen > 4 && strcmp(filename + namelen - 4, ".jnl") == 0)
+	if (namelen > 4U && strcmp(filename + namelen - 4, ".jnl") == 0)
 		namelen -= 4;
 
 	result = isc_string_printf(newname, sizeof(newname), "%.*s.jnw",
-				   namelen, filename);
+				   (int)namelen, filename);
 	if (result != ISC_R_SUCCESS)
 		return (result);
 
 	result = isc_string_printf(backup, sizeof(backup), "%.*s.jbk",
-				   namelen, filename);
+				   (int)namelen, filename);
 	if (result != ISC_R_SUCCESS)
 		return (result);
 

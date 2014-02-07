@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2004-2014  Internet Systems Consortium, Inc. ("ISC")
 # Copyright (C) 2000-2002  Internet Software Consortium.
 #
 # Permission to use, copy, modify, and/or distribute this software for any
@@ -19,8 +19,6 @@
 
 SYSTEMTESTTOP=..
 . $SYSTEMTESTTOP/conf.sh
-
-RANDFILE=random.data
 
 status=0
 n=1
@@ -1379,6 +1377,36 @@ n=`expr $n + 1`
 if [ $ret != 0 ]; then echo "I:failed"; fi
 status=`expr $status + $ret`
 
+echo "I:checking dnssec-signzone keeps valid signatures from inactive keys ($n)"
+ret=0
+zone=example
+(
+cd signer
+cp -f example.db.in example.db
+$SIGNER -SD -o example example.db > /dev/null 2>&1
+echo '$INCLUDE "example.db.signed"' >> example.db
+# now retire key2 and resign the zone
+$SETTIME -I now $key2 > /dev/null 2>&1
+$SIGNER -SD -o example example.db > /dev/null 2>&1
+) || ret=1
+grep " $keyid2 " signer/example.db.signed > /dev/null 2>&1 || ret=1
+grep " $keyid3 " signer/example.db.signed > /dev/null 2>&1 || ret=1
+n=`expr $n + 1`
+if [ $ret != 0 ]; then echo "I:failed"; fi
+status=`expr $status + $ret`
+
+echo "I:checking dnssec-signzone -Q purges signatures from inactive keys ($n)"
+ret=0
+(
+cd signer
+$SIGNER -SDQ -o example example.db > /dev/null 2>&1
+) || ret=1
+grep " $keyid2 " signer/example.db.signed > /dev/null 2>&1 && ret=1
+grep " $keyid3 " signer/example.db.signed > /dev/null 2>&1 || ret=1
+n=`expr $n + 1`
+if [ $ret != 0 ]; then echo "I:failed"; fi
+status=`expr $status + $ret`
+
 echo "I:checking dnssec-signzone retains unexpired signatures ($n)"
 ret=0
 (
@@ -1711,7 +1739,7 @@ echo "I:checking that the NSEC3 record for the apex is properly signed when a DN
 ret=0
 (
 cd ns3
-kskname=`$KEYGEN -q -3 -r ../random.data -fk update-nsec3.example`
+kskname=`$KEYGEN -q -3 -r $RANDFILE -fk update-nsec3.example`
 (
 echo zone update-nsec3.example
 echo server 10.53.0.3 5300
@@ -2085,7 +2113,6 @@ ret=0
 $RNDC -c ../common/rndc.conf -s 10.53.0.3 -p 9953 freeze expiring.example 2>&1 | sed 's/^/I:ns3 /'
 (
 cd ns3
-RANDFILE=../random.data
 for file in K*.moved; do
   mv $file `basename $file .moved`
 done
@@ -2340,6 +2367,36 @@ done
 n=`expr $n + 1`
 if test "$before" = "$after" ; then echo "I:failed"; ret=1; fi
 status=`expr $status + $ret`
+
+cp ns4/named4.conf ns4/named.conf
+$RNDC -c ../common/rndc.conf -s 10.53.0.4 -p 9953 reconfig 2>&1 | sed 's/^/I:ns4 /'
+sleep 3
+
+echo "I:check insecure delegation between static-stub zones ($n)"
+ret=0
+$DIG $DIGOPTS ns insecure.secure.example \
+	@10.53.0.4 > dig.out.ns4.1.test$n || ret=1
+grep "SERVFAIL" dig.out.ns4.1.test$n > /dev/null && ret=1
+$DIG $DIGOPTS ns secure.example \
+	@10.53.0.4 > dig.out.ns4.2.test$n || ret=1
+grep "SERVFAIL" dig.out.ns4.2.test$n > /dev/null && ret=1
+n=`expr $n + 1`
+if [ $ret != 0 ]; then echo "I:failed"; fi
+status=`expr $status + $ret`
+
+echo "I:check the acceptance of seconds as inception and expiration times ($n)"
+ret=0
+in="NSEC 8 0 86400 1390003200 1389394800 33655 . NYWjZYBV1b+h4j0yu/SmPOOylR8P4IXKDzHX3NwEmU1SUp27aJ91dP+i+UBcnPmBib0hck4DrFVvpflCEpCnVQd2DexcN0GX+3PM7XobxhtDlmnU X1L47zJlbdHNwTqHuPaMM6Xy9HGMXps7O5JVyfggVhTz2C+G5OVxBdb2rOo="
+
+exp="NSEC 8 0 86400 20140118000000 20140110230000 33655 . NYWjZYBV1b+h4j0yu/SmPOOylR8P4IXKDzHX3NwEmU1SUp27aJ91dP+i +UBcnPmBib0hck4DrFVvpflCEpCnVQd2DexcN0GX+3PM7XobxhtDlmnU X1L47zJlbdHNwTqHuPaMM6Xy9HGMXps7O5JVyfggVhTz2C+G5OVxBdb2 rOo="
+
+out=`echo "IN RRSIG $in" | $RRCHECKER -p | sed 's/^IN.RRSIG.//'`
+[ "$out" = "$exp" ] || ret=1
+n=`expr $n + 1`
+if [ $ret != 0 ]; then echo "I:failed"; fi
+status=`expr $status + $ret`
+
+
 
 echo "I:exit status: $status"
 exit $status

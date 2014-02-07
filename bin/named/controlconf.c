@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2008, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2008, 2011-2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 2001-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -333,7 +333,7 @@ control_recvmessage(isc_task_t *task, isc_event_t *event) {
 	isc_region_t r;
 	isc_uint32_t len;
 	isc_buffer_t text;
-	char textarray[1024];
+	char textarray[2*1024];
 	isc_result_t result;
 	isc_result_t eresult;
 	isccc_sexpr_t *_ctrl;
@@ -370,7 +370,7 @@ control_recvmessage(isc_task_t *task, isc_event_t *event) {
 		secret.rstart = isc_mem_get(listener->mctx, key->secret.length);
 		if (secret.rstart == NULL)
 			goto cleanup;
-		memcpy(secret.rstart, key->secret.base, key->secret.length);
+		memmove(secret.rstart, key->secret.base, key->secret.length);
 		secret.rend = secret.rstart + key->secret.length;
 		algorithm = key->algorithm;
 		result = isccc_cc_fromwire(&ccregion, &request,
@@ -795,8 +795,8 @@ register_keys(const cfg_obj_t *control, const cfg_obj_t *keylist,
 				free_controlkey(keyid, mctx);
 				break;
 			}
-			memcpy(keyid->secret.base, isc_buffer_base(&b),
-			       keyid->secret.length);
+			memmove(keyid->secret.base, isc_buffer_base(&b),
+				keyid->secret.length);
 		}
 	}
 }
@@ -879,8 +879,8 @@ get_rndckey(isc_mem_t *mctx, controlkeylist_t *keyids) {
 			   "out of memory", keyid->keyname);
 		CHECK(ISC_R_NOMEMORY);
 	}
-	memcpy(keyid->secret.base, isc_buffer_base(&b),
-	       keyid->secret.length);
+	memmove(keyid->secret.base, isc_buffer_base(&b),
+		keyid->secret.length);
 	ISC_LIST_APPEND(*keyids, keyid, link);
 	keyid = NULL;
 	result = ISC_R_SUCCESS;

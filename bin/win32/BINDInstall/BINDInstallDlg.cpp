@@ -1,5 +1,5 @@
 /*
- * Portions Copyright (C) 2004-2010, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Portions Copyright (C) 2004-2010, 2013, 2014  Internet Systems Consortium, Inc. ("ISC")
  * Portions Copyright (C) 2001, 2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -131,11 +131,32 @@ const FileData installFiles[] =
 	{"libisc.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
 	{"libisccfg.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
 	{"libisccc.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#ifdef USE_PKCS11
+	{"libiscpk11.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#endif
 	{"libdns.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
 	{"liblwres.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#ifdef OPENSSL
 	{"libeay32.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#endif
 #ifdef HAVE_LIBXML2
 	{"libxml2.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#endif
+#ifdef USE_GSSAPI
+#ifndef _WIN64
+	{"gssapi32.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+	{"krb5_32.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#else
+	{"gssapi64.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+	{"krb5_64.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#endif
+#endif
+#ifdef HAVE_GEOIP
+	{"libgeoip.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+#endif
+#ifdef WITH_IDN
+	{"idnkit.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
+	{"iconv.dll", FileData::BinDir, FileData::Critical, FALSE, TRUE},
 #endif
 	{"named.exe", FileData::BinDir, FileData::Critical, FALSE, FALSE},
 	{"nsupdate.exe", FileData::BinDir, FileData::Normal, FALSE, TRUE},
@@ -163,9 +184,16 @@ const FileData installFiles[] =
 	{"named-journalprint.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"named-rrchecker.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"isc-hmax-fixup.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+#ifdef USE_PKCS11
 	{"pkcs11-destroy.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"pkcs11-keygen.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
 	{"pkcs11-list.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+	{"pkcs11-tokens.exe", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+#endif
+#ifdef USE_PYTHON
+	{"dnssec-checkds.py", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+	{"dnssec-coverage.py", FileData::BinDir, FileData::Normal, FALSE, FALSE},
+#endif
 	{"readme1st.txt", FileData::BinDir, FileData::Trivial, FALSE, TRUE},
 	{NULL, -1, -1}
 };

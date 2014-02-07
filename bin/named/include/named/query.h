@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2010, 2011, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2005, 2007, 2010, 2011, 2013, 2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -57,6 +57,7 @@ struct ns_query {
 	isc_boolean_t			isreferral;
 	isc_mutex_t			fetchlock;
 	dns_fetch_t *			fetch;
+	dns_fetch_t *			prefetch;
 	dns_rpz_st_t *			rpz_st;
 	isc_bufferlist_t		namebufs;
 	ISC_LIST(ns_dbversion_t)	activeversions;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2007, 2009, 2011, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2007, 2009, 2011, 2013, 2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -229,6 +229,10 @@ dns_acl_match(const isc_netaddr_t *reqaddr,
  * If there is a match in the element list (either positive or negative)
  * and 'matchelt' is non-NULL, *matchelt will be pointed to the matching
  * element.
+ *
+ * 'env' points to the current ACL environment, including the
+ * current values of localhost and localnets and (if applicable)
+ * the GeoIP context.
  *
  * Returns:
  *\li	#ISC_R_SUCCESS		Always succeeds.

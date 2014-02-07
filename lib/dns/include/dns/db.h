@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2009, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2009, 2011-2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -252,6 +252,7 @@ struct dns_db {
 #define DNS_DBADD_FORCE			0x02
 #define DNS_DBADD_EXACT			0x04
 #define DNS_DBADD_EXACTTTL		0x08
+#define DNS_DBADD_PREFETCH		0x10
 /*@}*/
 
 /*%

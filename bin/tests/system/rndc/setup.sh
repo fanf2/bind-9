@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2011-2013  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2011-2014  Internet Systems Consortium, Inc. ("ISC")
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -21,7 +21,7 @@ SYSTEMTESTTOP=..
 
 sh clean.sh
 
-../../../tools/genrandom 400 random.data
+test -e $RANDFILE || $GENRANDOM 400 $RANDFILE
 
 sh ../genzone.sh 2 >ns2/nil.db
 sh ../genzone.sh 2 >ns2/other.db
@@ -30,7 +30,7 @@ sh ../genzone.sh 2 >ns2/static.db
 cat ns4/named.conf.in > ns4/named.conf
 
 make_key () {
-    $RNDCCONFGEN -r random.data -k key$1 -A $2 -s 10.53.0.4 -p 995${1} \
+    $RNDCCONFGEN -r $RANDFILE -k key$1 -A $2 -s 10.53.0.4 -p 995${1} \
             > ns4/key${1}.conf
     egrep -v '(^# Start|^# End|^# Use|^[^#])' ns4/key$1.conf | cut -c3- | \
             sed 's/allow { 10.53.0.4/allow { any/' >> ns4/named.conf

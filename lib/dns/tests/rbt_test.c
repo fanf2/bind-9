@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2012-2014  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -205,7 +205,7 @@ add_test_data(isc_mem_t *mctx, dns_rbt_t *rbt) {
 	dns_compress_init(&cctx, -1, mctx);
 
 	while (testdatap->name != NULL && testdatap->data.data != NULL) {
-		memcpy(buffer, testdatap->name, testdatap->name_len);
+		memmove(buffer, testdatap->name, testdatap->name_len);
 
 		isc_buffer_init(&b, buffer, testdatap->name_len);
 		isc_buffer_add(&b, testdatap->name_len);
@@ -247,7 +247,7 @@ check_test_data(dns_rbt_t *rbt) {
 	foundname = dns_fixedname_name(&fixed);
 
 	while (testdatap->name != NULL && testdatap->data.data != NULL) {
-		memcpy(buffer, testdatap->name, testdatap->name_len + 1);
+		memmove(buffer, testdatap->name, testdatap->name_len + 1);
 		arg = buffer;
 
 		isc_buffer_init(&b, arg, testdatap->name_len);

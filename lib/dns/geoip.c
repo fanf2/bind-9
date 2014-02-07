@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2013, 2014  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,7 +29,14 @@
 
 #include <isc/thread.h>
 #include <math.h>
+#ifndef WIN32
 #include <netinet/in.h>
+#else
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_   /* Prevent inclusion of winsock.h in windows.h */
+#endif
+#include <winsock2.h>
+#endif	/* WIN32 */
 #include <dns/log.h>
 
 #ifdef HAVE_GEOIP
@@ -107,6 +114,8 @@ state_key_init(void) {
 	if (!state_key_initialized) {
 		LOCK(&key_mutex);
 		if (!state_key_initialized) {
+			int ret;
+
 			if (state_mctx == NULL)
 				result = isc_mem_create2(0, 0, &state_mctx, 0);
 			if (result != ISC_R_SUCCESS)
@@ -114,7 +123,7 @@ state_key_init(void) {
 			isc_mem_setname(state_mctx, "geoip_state", NULL);
 			isc_mem_setdestroycheck(state_mctx, ISC_FALSE);
 
-			int ret = isc_thread_key_create(&state_key, free_state);
+			ret = isc_thread_key_create(&state_key, free_state);
 			if (ret == 0)
 				state_key_initialized = ISC_TRUE;
 			else
@@ -240,8 +249,9 @@ country_lookup(GeoIP *db, dns_geoip_subtype_t subtype,
 
 	if (prev_state != NULL &&
 	    prev_state->subtype == subtype &&
+	    prev_state->family == family &&
 	    ((prev_state->family == AF_INET && prev_state->ipnum == ipnum) ||
-	     (prev_state->family == AF_INET6 &&
+	     (prev_state->family == AF_INET6 && ipnum6 != NULL &&
 	      memcmp(prev_state->ipnum6.s6_addr, ipnum6->s6_addr, 16) == 0)))
 		text = prev_state->text;
 
@@ -512,7 +522,7 @@ static int
 netspeed_lookup(GeoIP *db, dns_geoip_subtype_t subtype, isc_uint32_t ipnum) {
 	geoip_state_t *prev_state = NULL;
 	isc_boolean_t found = ISC_FALSE;
-	int id;
+	int id = -1;
 
 	REQUIRE(db != NULL);
 
@@ -646,8 +656,11 @@ dns_geoip_match(const isc_netaddr_t *reqaddr,
 		maxlen = 255;
  getcountry:
 		db = DB46(reqaddr, geoip, country);
-		INSIST(db != NULL);
+		if (db == NULL)
+			return (ISC_FALSE);
+
 		INSIST(elt->as_string != NULL);
+
 		cs = country_lookup(db, subtype, reqaddr->family,
 				    ipnum, ipnum6);
 		if (cs != NULL && strncasecmp(elt->as_string, cs, maxlen) == 0)
@@ -666,6 +679,9 @@ dns_geoip_match(const isc_netaddr_t *reqaddr,
 		INSIST(elt->as_string != NULL);
 
 		db = DB46(reqaddr, geoip, city);
+		if (db == NULL)
+			return (ISC_FALSE);
+
 		record = city_lookup(db, subtype,
 				     reqaddr->family, ipnum, ipnum6);
 		if (record == NULL)
@@ -679,6 +695,9 @@ dns_geoip_match(const isc_netaddr_t *reqaddr,
 
 	case dns_geoip_city_metrocode:
 		db = DB46(reqaddr, geoip, city);
+		if (db == NULL)
+			return (ISC_FALSE);
+
 		record = city_lookup(db, subtype,
 				     reqaddr->family, ipnum, ipnum6);
 		if (record == NULL)
@@ -690,6 +709,9 @@ dns_geoip_match(const isc_netaddr_t *reqaddr,
 
 	case dns_geoip_city_areacode:
 		db = DB46(reqaddr, geoip, city);
+		if (db == NULL)
+			return (ISC_FALSE);
+
 		record = city_lookup(db, subtype,
 				     reqaddr->family, ipnum, ipnum6);
 		if (record == NULL)
@@ -702,7 +724,10 @@ dns_geoip_match(const isc_netaddr_t *reqaddr,
 	case dns_geoip_region_countrycode:
 	case dns_geoip_region_code:
 	case dns_geoip_region_name:
-		INSIST(geoip->region != NULL);
+	case dns_geoip_region:
+		if (geoip->region == NULL)
+			return (ISC_FALSE);
+
 		INSIST(elt->as_string != NULL);
 
 		/* Region DB is not supported for IPv6 */
@@ -735,7 +760,9 @@ dns_geoip_match(const isc_netaddr_t *reqaddr,
 		db = geoip->domain;
 
  getname:
-		INSIST(db != NULL);
+		if (db == NULL)
+			return (ISC_FALSE);
+
 		INSIST(elt->as_string != NULL);
 		/* ISP, Org, AS, and Domain are not supported for IPv6 */
 		if (reqaddr->family == AF_INET6)

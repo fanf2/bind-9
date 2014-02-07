@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -615,6 +615,7 @@ ns_query_init(ns_client_t *client) {
 	if (result != ISC_R_SUCCESS)
 		return (result);
 	client->query.fetch = NULL;
+	client->query.prefetch = NULL;
 	client->query.authdb = NULL;
 	client->query.authzone = NULL;
 	client->query.authdbset = ISC_FALSE;
@@ -3786,6 +3787,80 @@ query_resume(isc_task_t *task, isc_event_t *event) {
 	dns_resolver_destroyfetch(&fetch);
 }
 
+static void
+prefetch_done(isc_task_t *task, isc_event_t *event) {
+	dns_fetchevent_t *devent = (dns_fetchevent_t *)event;
+	ns_client_t *client;
+
+	UNUSED(task);
+
+	REQUIRE(event->ev_type == DNS_EVENT_FETCHDONE);
+	client = devent->ev_arg;
+	REQUIRE(NS_CLIENT_VALID(client));
+	REQUIRE(task == client->task);
+
+	LOCK(&client->query.fetchlock);
+	if (client->query.prefetch != NULL) {
+		INSIST(devent->fetch == client->query.prefetch);
+		client->query.prefetch = NULL;
+	}
+	UNLOCK(&client->query.fetchlock);
+	if (devent->fetch != NULL)
+		dns_resolver_destroyfetch(&devent->fetch);
+	if (devent->node != NULL)
+		dns_db_detachnode(devent->db, &devent->node);
+	if (devent->db != NULL)
+		dns_db_detach(&devent->db);
+	query_putrdataset(client, &devent->rdataset);
+	isc_event_free(&event);
+	ns_client_detach(&client);
+}
+
+static void
+query_prefetch(ns_client_t *client, dns_name_t *qname,
+	       dns_rdataset_t *rdataset)
+{
+	isc_result_t result;
+	isc_sockaddr_t *peeraddr;
+	dns_rdataset_t *tmprdataset;
+	ns_client_t *dummy = NULL;
+	unsigned int options;
+
+	if (client->view->prefetch_trigger == 0U ||
+	    rdataset->ttl > client->view->prefetch_trigger ||
+	    (rdataset->attributes & DNS_RDATASETATTR_PREFETCH) == 0)
+		return;
+
+	if (client->recursionquota == NULL) {
+		result = isc_quota_attach(&ns_g_server->recursionquota,
+					  &client->recursionquota);
+		if (result != ISC_R_SUCCESS)
+			return;
+	}
+	if (client->query.prefetch != NULL)
+		return;
+
+	tmprdataset = query_newrdataset(client);
+	if (tmprdataset == NULL)
+		return;
+	if ((client->attributes & NS_CLIENTATTR_TCP) == 0)
+		peeraddr = &client->peeraddr;
+	else
+		peeraddr = NULL;
+	ns_client_attach(client, &dummy);
+	options = client->query.fetchoptions | DNS_FETCHOPT_PREFETCH;
+	result = dns_resolver_createfetch2(client->view->resolver,
+					   qname, rdataset->type, NULL, NULL,
+					   NULL, peeraddr, client->message->id,
+					   options, client->task,
+					   prefetch_done, client, tmprdataset,
+					   NULL, &client->query.prefetch);
+	if (result != ISC_R_SUCCESS) {
+		query_putrdataset(client, &tmprdataset);
+		ns_client_detach(&dummy);
+	}
+}
+
 static isc_result_t
 query_recurse(ns_client_t *client, dns_rdatatype_t qtype, dns_name_t *qname,
 	      dns_name_t *qdomain, dns_rdataset_t *nameservers,
@@ -4606,12 +4681,12 @@ rpz_rewrite_ip_rrset(ns_client_t *client,
 		switch (rdata.type) {
 		case dns_rdatatype_a:
 			INSIST(rdata.length == 4);
-			memcpy(&ina.s_addr, rdata.data, 4);
+			memmove(&ina.s_addr, rdata.data, 4);
 			isc_netaddr_fromin(&netaddr, &ina);
 			break;
 		case dns_rdatatype_aaaa:
 			INSIST(rdata.length == 16);
-			memcpy(in6a.s6_addr, rdata.data, 16);
+			memmove(in6a.s6_addr, rdata.data, 16);
 			isc_netaddr_fromin6(&netaddr, &in6a);
 			break;
 		default:
@@ -5381,12 +5456,12 @@ rdata_tonetaddr(const dns_rdata_t *rdata, isc_netaddr_t *netaddr) {
 	switch (rdata->type) {
 	case dns_rdatatype_a:
 		INSIST(rdata->length == 4);
-		memcpy(&ina.s_addr, rdata->data, 4);
+		memmove(&ina.s_addr, rdata->data, 4);
 		isc_netaddr_fromin(netaddr, &ina);
 		return (ISC_R_SUCCESS);
 	case dns_rdatatype_aaaa:
 		INSIST(rdata->length == 16);
-		memcpy(in6a.s6_addr, rdata->data, 16);
+		memmove(in6a.s6_addr, rdata->data, 16);
 		isc_netaddr_fromin6(netaddr, &in6a);
 		return (ISC_R_SUCCESS);
 	default:
@@ -5659,8 +5734,7 @@ query_findclosestnsec3(dns_name_t *qname, dns_db_t *db,
 	dns_fixedname_t fixed;
 	dns_hash_t hash;
 	dns_name_t name;
-	int order;
-	unsigned int count;
+	unsigned int skip = 0, labels;
 	dns_rdata_nsec3_t nsec3;
 	dns_rdata_t rdata = DNS_RDATA_INIT;
 	isc_boolean_t optout;
@@ -5675,6 +5749,7 @@ query_findclosestnsec3(dns_name_t *qname, dns_db_t *db,
 
 	dns_name_init(&name, NULL);
 	dns_name_clone(qname, &name);
+	labels = dns_name_countlabels(&name);
 	dns_clientinfomethods_init(&cm, ns_client_sourceip);
 	dns_clientinfo_init(&ci, client);
 
@@ -5708,13 +5783,14 @@ query_findclosestnsec3(dns_name_t *qname, dns_db_t *db,
 		dns_rdata_reset(&rdata);
 		optout = ISC_TF((nsec3.flags & DNS_NSEC3FLAG_OPTOUT) != 0);
 		if (found != NULL && optout &&
-		    dns_name_fullcompare(&name, dns_db_origin(db), &order,
-					 &count) == dns_namereln_subdomain) {
+		    dns_name_issubdomain(&name, dns_db_origin(db)))
+		{
 			dns_rdataset_disassociate(rdataset);
 			if (dns_rdataset_isassociated(sigrdataset))
 				dns_rdataset_disassociate(sigrdataset);
-			count = dns_name_countlabels(&name) - 1;
-			dns_name_getlabelsequence(&name, 1, count, &name);
+			skip++;
+			dns_name_getlabelsequence(qname, skip, labels - skip,
+						  &name);
 			ns_client_log(client, DNS_LOGCATEGORY_DNSSEC,
 				      NS_LOGMODULE_QUERY, ISC_LOG_DEBUG(3),
 				      "looking for closest provable encloser");
@@ -5732,7 +5808,11 @@ query_findclosestnsec3(dns_name_t *qname, dns_db_t *db,
 		ns_client_log(client, DNS_LOGCATEGORY_DNSSEC,
 			      NS_LOGMODULE_QUERY, ISC_LOG_WARNING,
 			      "expected covering NSEC3, got an exact match");
-	if (found != NULL)
+	if (found == qname) {
+		if (skip != 0U)
+			dns_name_getlabelsequence(qname, skip, labels - skip,
+						  found);
+	} else if (found != NULL)
 		dns_name_copy(&name, found, NULL);
 	return;
 }
@@ -7266,6 +7346,8 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 			noqname = rdataset;
 		else
 			noqname = NULL;
+		if (!is_zone && RECURSIONOK(client))
+			query_prefetch(client, fname, rdataset);
 		query_addrrset(client, &fname, &rdataset, sigrdatasetp, dbuf,
 			       DNS_SECTION_ANSWER);
 		if (noqname != NULL)
@@ -7338,6 +7420,8 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 				      NULL);
 			need_wildcardproof = ISC_TRUE;
 		}
+		if (!is_zone && RECURSIONOK(client))
+			query_prefetch(client, fname, rdataset);
 		query_addrrset(client, &fname, &rdataset, sigrdatasetp, dbuf,
 			       DNS_SECTION_ANSWER);
 		/*
@@ -7542,6 +7626,8 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 				if (rpz_st != NULL)
 					rdataset->ttl = ISC_MIN(rdataset->ttl,
 							    rpz_st->m.ttl);
+				if (!is_zone && RECURSIONOK(client))
+					query_prefetch(client, fname, rdataset);
 				query_addrrset(client,
 					       fname != NULL ? &fname : &tname,
 					       &rdataset, NULL,
@@ -7796,9 +7882,12 @@ query_find(ns_client_t *client, dns_fetchevent_t *event, dns_rdatatype_t qtype)
 			query_filter64(client, &fname, rdataset, dbuf,
 				       DNS_SECTION_ANSWER);
 			query_putrdataset(client, &rdataset);
-		} else
+		} else {
+			if (!is_zone && RECURSIONOK(client))
+				query_prefetch(client, fname, rdataset);
 			query_addrrset(client, &fname, &rdataset,
 				       sigrdatasetp, dbuf, DNS_SECTION_ANSWER);
+		}
 
 		if (noqname != NULL)
 			query_addnoqnameproof(client, noqname);

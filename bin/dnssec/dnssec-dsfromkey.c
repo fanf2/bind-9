@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2008-2012, 2014  Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -448,7 +448,7 @@ main(int argc, char **argv) {
 		else if (strcasecmp(algname, "SHA256") == 0 ||
 			 strcasecmp(algname, "SHA-256") == 0)
 			dtype = DNS_DSDIGEST_SHA256;
-#ifdef HAVE_OPENSSL_GOST
+#if defined(HAVE_OPENSSL_GOST) || defined(HAVE_PKCS11_GOST)
 		else if (strcasecmp(algname, "GOST") == 0)
 			dtype = DNS_DSDIGEST_GOST;
 #endif

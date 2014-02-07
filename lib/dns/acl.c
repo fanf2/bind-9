@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2009, 2011, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2009, 2011, 2013, 2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2002  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -292,8 +292,8 @@ dns_acl_merge(dns_acl_t *dest, dns_acl_t *source, isc_boolean_t pos)
 			return (ISC_R_NOMEMORY);
 
 		/* Copy in the original elements */
-		memcpy(newmem, dest->elements,
-		       dest->length * sizeof(dns_aclelement_t));
+		memmove(newmem, dest->elements,
+			dest->length * sizeof(dns_aclelement_t));
 
 		/* Release the memory for the old elements array */
 		isc_mem_put(dest->mctx, dest->elements,
@@ -408,6 +408,8 @@ dns_aclelement_match(const isc_netaddr_t *reqaddr,
 
 #ifdef HAVE_GEOIP
 	case dns_aclelementtype_geoip:
+		if (env == NULL || env->geoip == NULL)
+			return (ISC_FALSE);
 		return (dns_geoip_match(reqaddr, env->geoip, &e->geoip_elem));
 #endif
 	default:
