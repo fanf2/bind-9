@@ -22,15 +22,15 @@ echo ==
 echo ==  $(date +%Y-%m-%d.%H:%M:%S%z) $PREFIX start
 echo ==
 
-PATH_OpenSSL=/opt/OpenSSL-1.0.1e+0
+PATH_OpenSSL=/opt/OpenSSL-1.0.1f+0
 
 export PYTHON=/opt/python-2.7.6+0/bin/python2.7
 
 # Tell the configure script to link with the correct OpenSSL
-LDFLAGS="-Wl,-R$PATH_OpenSSL/lib"
+LDFLAGS="-R$PATH_OpenSSL/lib"
 export LDFLAGS
 
-./configure --enable-threads --with-readline --with-pkcs11=no \
+./configure --enable-threads --with-readline --with-pkcs11=no --with-libxml2=no \
 	--with-openssl=$PATH_OpenSSL --without-gost --without-gssapi \
 	--prefix=$PREFIX --mandir=$PREFIX/man \
 	--localstatedir=/spool/bind/var \
