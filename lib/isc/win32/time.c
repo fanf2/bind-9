@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004, 2006-2009, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004, 2006-2009, 2012-2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1998-2001, 2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -30,6 +30,7 @@
 
 #include <isc/assertions.h>
 #include <isc/time.h>
+#include <isc/tm.h>
 #include <isc/util.h>
 
 /*
@@ -91,8 +92,8 @@ isc_time_set(isc_time_t *t, unsigned int seconds, unsigned int nanoseconds) {
 
 	SystemTimeToFileTime(&epoch, &temp);
 
-	i1.LowPart = t->absolute.dwLowDateTime;
-	i1.HighPart = t->absolute.dwHighDateTime;
+	i1.LowPart = temp.dwLowDateTime;
+	i1.HighPart = temp.dwHighDateTime;
 
 	i1.QuadPart += (unsigned __int64)nanoseconds/100;
 	i1.QuadPart += (unsigned __int64)seconds*10000000;
@@ -243,6 +244,26 @@ isc_time_seconds(const isc_time_t *t) {
 	return ((isc_uint32_t)i3);
 }
 
+isc_result_t
+isc_time_secondsastimet(const isc_time_t *t, time_t *secondsp) {
+	time_t seconds;
+
+	REQUIRE(t != NULL);
+
+	seconds = (time_t)isc_time_seconds(t);
+
+	INSIST(sizeof(unsigned int) == sizeof(isc_uint32_t));
+	INSIST(sizeof(time_t) >= sizeof(isc_uint32_t));
+
+	if (isc_time_seconds(t) > (~0U>>1) && seconds <= (time_t)(~0U>>1))
+		return (ISC_R_RANGE);
+
+	*secondsp = seconds;
+
+	return (ISC_R_SUCCESS);
+}
+
+
 isc_uint32_t
 isc_time_nanoseconds(const isc_time_t *t) {
 	ULARGE_INTEGER i;
@@ -296,6 +317,24 @@ isc_time_formathttptimestamp(const isc_time_t *t, char *buf, unsigned int len) {
 	} else {
 		buf[0] = 0;
 	}
+}
+
+isc_result_t
+isc_time_parsehttptimestamp(char *buf, isc_time_t *t) {
+	struct tm t_tm;
+	time_t when;
+	char *p;
+
+	REQUIRE(buf != NULL);
+	REQUIRE(t != NULL);
+	p = isc_tm_strptime(buf, "%a, %d %b %Y %H:%M:%S", &t_tm);
+	if (p == NULL)
+		return (ISC_R_UNEXPECTED);
+	when = isc_tm_timegm(&t_tm);
+	if (when == -1)
+		return (ISC_R_UNEXPECTED);
+	isc_time_set(t, when, 0);
+	return (ISC_R_SUCCESS);
 }
 
 void

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -73,6 +73,7 @@ EXTERN const char *		ns_g_description	INIT(DESCRIPTION);
 EXTERN const char *		ns_g_srcid		INIT(SRCID);
 EXTERN const char *		ns_g_buildtime		INIT(BUILDTIME);
 EXTERN const char *		ns_g_configargs		INIT(CONFIGARGS);
+EXTERN const char *		ns_g_builder		INIT(BUILDER);
 EXTERN in_port_t		ns_g_port		INIT(0);
 EXTERN isc_dscp_t		ns_g_dscp		INIT(-1);
 EXTERN in_port_t		lwresd_g_listenport	INIT(0);
@@ -150,8 +151,8 @@ EXTERN const char *		lwresd_g_defaultpidfile INIT(NS_LOCALSTATEDIR
 
 EXTERN const char *		ns_g_username		INIT(NULL);
 
-#ifdef USE_PKCS11
-EXTERN const char *		ns_g_engine		INIT("pkcs11");
+#if defined(USE_PKCS11)
+EXTERN const char *		ns_g_engine		INIT(PKCS11_ENGINE);
 #else
 EXTERN const char *		ns_g_engine		INIT(NULL);
 #endif

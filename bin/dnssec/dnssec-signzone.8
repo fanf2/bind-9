@@ -1,4 +1,4 @@
-.\" Copyright (C) 2004-2009, 2011-2013 Internet Systems Consortium, Inc. ("ISC")
+.\" Copyright (C) 2004-2009, 2011-2014 Internet Systems Consortium, Inc. ("ISC")
 .\" Copyright (C) 2000-2003 Internet Software Consortium.
 .\" 
 .\" Permission to use, copy, modify, and/or distribute this software for any
@@ -83,7 +83,9 @@ Output only those record types automatically managed by
 .PP
 \-E \fIengine\fR
 .RS 4
-Uses a crypto hardware (OpenSSL engine) for the crypto operations it supports, for instance signing with private keys from a secure key store. When compiled with PKCS#11 support it defaults to pkcs11; the empty name resets it to no engine.
+When applicable, specifies the hardware to use for cryptographic operations, such as a secure key store used for signing.
+.sp
+When BIND is built with OpenSSL PKCS#11 support, this defaults to the string "pkcs11", which identifies an OpenSSL engine that can drive a cryptographic accelerator or hardware service module. When BIND is built with native PKCS#11 cryptography (\-\-enable\-native\-pkcs11), it defaults to the path of the PKCS#11 provider library specified via "\-\-with\-pkcs11".
 .RE
 .PP
 \-g
@@ -261,15 +263,25 @@ Disable post sign verification tests.
 The post sign verification test ensures that for each algorithm in use there is at least one non revoked self signed KSK key, that all revoked KSK keys are self signed, and that all records in the zone are signed by the algorithm. This option skips these tests.
 .RE
 .PP
-\-R
+\-Q
 .RS 4
-Remove signatures from keys that no longer exist.
+Remove signatures from keys that are no longer active.
 .sp
 Normally, when a previously\-signed zone is passed as input to the signer, and a DNSKEY record has been removed and replaced with a new one, signatures from the old key that are still within their validity period are retained. This allows the zone to continue to validate with cached copies of the old DNSKEY RRset. The
-\fB\-R\fR
+\fB\-Q\fR
 forces
 \fBdnssec\-signzone\fR
-to remove all orphaned signatures.
+to remove signatures from keys that are no longer active. This enables ZSK rollover using the procedure described in RFC 4641, section 4.2.1.1 ("Pre\-Publish Key Rollover").
+.RE
+.PP
+\-R
+.RS 4
+Remove signatures from keys that are no longer published.
+.sp
+This option is similar to
+\fB\-Q\fR, except it forces
+\fBdnssec\-signzone\fR
+to signatures from keys that are no longer published. This enables ZSK rollover using the procedure described in RFC 4641, section 4.2.1.2 ("Double Signature Zone Signing Key Rollover").
 .RE
 .PP
 \-r \fIrandomdev\fR
@@ -424,12 +436,13 @@ db.example.com.signed
 .PP
 \fBdnssec\-keygen\fR(8),
 BIND 9 Administrator Reference Manual,
-RFC 4033.
+RFC 4033,
+RFC 4641.
 .SH "AUTHOR"
 .PP
 Internet Systems Consortium
 .SH "COPYRIGHT"
-Copyright \(co 2004\-2009, 2011\-2013 Internet Systems Consortium, Inc. ("ISC")
+Copyright \(co 2004\-2009, 2011\-2014 Internet Systems Consortium, Inc. ("ISC")
 .br
 Copyright \(co 2000\-2003 Internet Software Consortium.
 .br

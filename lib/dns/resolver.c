@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2014  Internet Systems Consortium, Inc. ("ISC")
  * Copyright (C) 1999-2003  Internet Software Consortium.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -3740,8 +3740,6 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 			fctx->fwdpolicy = forwarders->fwdpolicy;
 
 		if (fctx->fwdpolicy != dns_fwdpolicy_only) {
-			dns_name_t suffix;
-
 			/*
 			 * The caller didn't supply a query domain and
 			 * nameservers, and we're not in forward-only mode,
@@ -3749,26 +3747,15 @@ fctx_create(dns_resolver_t *res, dns_name_t *name, dns_rdatatype_t type,
 			 */
 			if (dns_rdatatype_atparent(fctx->type))
 				findoptions |= DNS_DBFIND_NOEXACT;
-			result = dns_view_findzonecut(res->view, name, domain,
-						      0, findoptions, ISC_TRUE,
+			result = dns_view_findzonecut(res->view, fwdname,
+						      domain, 0, findoptions,
+						      ISC_TRUE,
 						      &fctx->nameservers,
 						      NULL);
 			if (result != ISC_R_SUCCESS)
 				goto cleanup_name;
 
-			/* Look for DS records in the parent. */
-			if (dns_rdatatype_atparent(fctx->type) &&
-			    dns_name_countlabels(domain) > 1)
-			{
-				unsigned int labels;
-				dns_name_init(&suffix, NULL);
-				labels = dns_name_countlabels(domain);
-				dns_name_getlabelsequence(domain, 1,
-							  labels - 1, &suffix);
-				domain = &suffix;
-			}
 			result = dns_name_dup(domain, mctx, &fctx->domain);
-
 			if (result != ISC_R_SUCCESS) {
 				dns_rdataset_disassociate(&fctx->nameservers);
 				goto cleanup_name;
@@ -4154,6 +4141,7 @@ validated(isc_task_t *task, isc_event_t *event) {
 	isc_result_t result = ISC_R_SUCCESS;
 	isc_stdtime_t now;
 	isc_uint32_t ttl;
+	unsigned options;
 
 	UNUSED(task); /* for now */
 
@@ -4395,8 +4383,11 @@ validated(isc_task_t *task, isc_event_t *event) {
 	if (result != ISC_R_SUCCESS)
 		goto noanswer_response;
 
+	options = 0;
+	if ((fctx->options & DNS_FETCHOPT_PREFETCH) != 0)
+		options = DNS_DBADD_PREFETCH;
 	result = dns_db_addrdataset(fctx->cache, node, NULL, now,
-				    vevent->rdataset, 0, ardataset);
+				    vevent->rdataset, options, ardataset);
 	if (result != ISC_R_SUCCESS &&
 	    result != DNS_R_UNCHANGED)
 		goto noanswer_response;
@@ -4807,6 +4798,12 @@ cache_name(fetchctx_t *fctx, dns_name_t *name, dns_adbaddrinfo_t *addrinfo,
 			rdataset->ttl = res->view->maxcachettl;
 
 		/*
+		 * Mark the rdataset as being prefetch eligible.
+		 */
+		if (rdataset->ttl > fctx->res->view->prefetch_eligible)
+			rdataset->attributes |= DNS_RDATASETATTR_PREFETCH;
+
+		/*
 		 * Find the SIG for this rdataset, if we have it.
 		 */
 		for (sigrdataset = ISC_LIST_HEAD(name->list);
@@ -4858,6 +4855,13 @@ cache_name(fetchctx_t *fctx, dns_name_t *name, dns_adbaddrinfo_t *addrinfo,
 			}
 
 			/*
+			 * Mark the rdataset as being prefetch eligible.
+			 */
+			if (rdataset->ttl > fctx->res->view->prefetch_eligible)
+				rdataset->attributes |= DNS_RDATASETATTR_PREFETCH;
+
+
+			/*
 			 * Cache this rdataset/sigrdataset pair as
 			 * pending data.  Track whether it was additional
 			 * or not.
@@ -4871,6 +4875,7 @@ cache_name(fetchctx_t *fctx, dns_name_t *name, dns_adbaddrinfo_t *addrinfo,
 			if (sigrdataset != NULL)
 				sigrdataset->trust = trust;
 			if (!need_validation || !ANSWER(rdataset)) {
+				options = 0;
 				if (ANSWER(rdataset) &&
 				   rdataset->type != dns_rdatatype_rrsig) {
 					isc_result_t tresult;
@@ -4887,10 +4892,13 @@ cache_name(fetchctx_t *fctx, dns_name_t *name, dns_adbaddrinfo_t *addrinfo,
 							      ISC_R_SUCCESS);
 					}
 				}
+				if ((fctx->options & DNS_FETCHOPT_PREFETCH) != 0)
+						options = DNS_DBADD_PREFETCH;
 				addedrdataset = ardataset;
 				result = dns_db_addrdataset(fctx->cache, node,
 							    NULL, now, rdataset,
-							    0, addedrdataset);
+							    options,
+							    addedrdataset);
 				if (result == DNS_R_UNCHANGED) {
 					result = ISC_R_SUCCESS;
 					if (!need_validation &&
@@ -4924,7 +4932,8 @@ cache_name(fetchctx_t *fctx, dns_name_t *name, dns_adbaddrinfo_t *addrinfo,
 					addedrdataset = asigrdataset;
 					result = dns_db_addrdataset(fctx->cache,
 								node, NULL, now,
-								sigrdataset, 0,
+								sigrdataset,
+								options,
 								addedrdataset);
 					if (result == DNS_R_UNCHANGED)
 						result = ISC_R_SUCCESS;
@@ -5012,7 +5021,9 @@ cache_name(fetchctx_t *fctx, dns_name_t *name, dns_adbaddrinfo_t *addrinfo,
 				 * over the existing cache contents.
 				 */
 				options = DNS_DBADD_FORCE;
-			} else
+			} else if ((fctx->options & DNS_FETCHOPT_PREFETCH) != 0)
+				options = DNS_DBADD_PREFETCH;
+			else
 				options = 0;
 
 			if (ANSWER(rdataset) &&
@@ -5592,11 +5603,11 @@ is_answeraddress_allowed(dns_view_t *view, dns_name_t *name,
 		dns_rdataset_current(rdataset, &rdata);
 		if (rdataset->type == dns_rdatatype_a) {
 			INSIST(rdata.length == sizeof(ina.s_addr));
-			memcpy(&ina.s_addr, rdata.data, sizeof(ina.s_addr));
+			memmove(&ina.s_addr, rdata.data, sizeof(ina.s_addr));
 			isc_netaddr_fromin(&netaddr, &ina);
 		} else {
 			INSIST(rdata.length == sizeof(in6a.s6_addr));
-			memcpy(in6a.s6_addr, rdata.data, sizeof(in6a.s6_addr));
+			memmove(in6a.s6_addr, rdata.data, sizeof(in6a.s6_addr));
 			isc_netaddr_fromin6(&netaddr, &in6a);
 		}
 
@@ -6808,7 +6819,7 @@ log_nsid(isc_buffer_t *opt, size_t nsid_len, resquery_t *query,
 	unsigned char *p, *buf, *nsid;
 
 	/* Allocate buffer for storing hex version of the NSID */
-	buflen = nsid_len * 2 + 1;
+	buflen = (isc_uint16_t)nsid_len * 2 + 1;
 	buf = isc_mem_get(mctx, buflen);
 	if (buf == NULL)
 		return;
@@ -9082,7 +9093,7 @@ dns_resolver_disable_algorithm(dns_resolver_t *resolver, dns_name_t *name,
 			}
 			memset(new, 0, len);
 			if (algorithms != NULL)
-				memcpy(new, algorithms, *algorithms);
+				memmove(new, algorithms, *algorithms);
 			new[len-1] |= mask;
 			*new = len;
 			node->data = new;
@@ -9196,7 +9207,7 @@ dns_resolver_disable_ds_digest(dns_resolver_t *resolver, dns_name_t *name,
 			}
 			memset(new, 0, len);
 			if (digests != NULL)
-				memcpy(new, digests, *digests);
+				memmove(new, digests, *digests);
 			new[len-1] |= mask;
 			*new = len;
 			node->data = new;

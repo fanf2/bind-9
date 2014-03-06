@@ -1,4 +1,4 @@
-# Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2004-2014  Internet Systems Consortium, Inc. ("ISC")
 # Copyright (C) 1998-2002  Internet Software Consortium.
 #
 # Permission to use, copy, modify, and/or distribute this software for any
@@ -49,9 +49,10 @@ DLZDRIVER_LIBS =	@DLZ_DRIVER_LIBS@
 CINCLUDES =	-I${srcdir}/include -I${srcdir}/unix/include -I. \
 		${LWRES_INCLUDES} ${DNS_INCLUDES} ${BIND9_INCLUDES} \
 		${ISCCFG_INCLUDES} ${ISCCC_INCLUDES} ${ISC_INCLUDES} \
+		${ISCPK11_INCLUDES} \
 		${DLZDRIVER_INCLUDES} ${DBDRIVER_INCLUDES} @DST_OPENSSL_INC@
 
-CDEFINES =      @CONTRIB_DLZ@ @USE_PKCS11@ @USE_OPENSSL@
+CDEFINES =      @CONTRIB_DLZ@ @USE_PKCS11@ @PKCS11_ENGINE@ @CRYPTO@
 
 CWARNINGS =
 
@@ -62,6 +63,7 @@ ISCLIBS =	../../lib/isc/libisc.@A@
 ISCNOSYMLIBS =	../../lib/isc/libisc-nosymtbl.@A@
 LWRESLIBS =	../../lib/lwres/liblwres.@A@
 BIND9LIBS =	../../lib/bind9/libbind9.@A@
+ISCPK11LIBS =	../../lib/iscpk11/libiscpk11.@A@
 
 DNSDEPLIBS =	../../lib/dns/libdns.@A@
 ISCCFGDEPLIBS =	../../lib/isccfg/libisccfg.@A@
@@ -69,16 +71,20 @@ ISCCCDEPLIBS =	../../lib/isccc/libisccc.@A@
 ISCDEPLIBS =	../../lib/isc/libisc.@A@
 LWRESDEPLIBS =	../../lib/lwres/liblwres.@A@
 BIND9DEPLIBS =	../../lib/bind9/libbind9.@A@
+ISCPK11DEPLIBS = ../../lib/iscpk11/libiscpk11.@A@
 
 DEPLIBS =	${LWRESDEPLIBS} ${DNSDEPLIBS} ${BIND9DEPLIBS} \
-		${ISCCFGDEPLIBS} ${ISCCCDEPLIBS} ${ISCDEPLIBS}
+		${ISCCFGDEPLIBS} ${ISCCCDEPLIBS} ${ISCDEPLIBS} \
+		${ISCPK11DEPLIBS}
 
 LIBS =		${LWRESLIBS} ${DNSLIBS} ${BIND9LIBS} \
 		${ISCCFGLIBS} ${ISCCCLIBS} ${ISCLIBS} \
+		${ISCPK11LIBS} \
 		${DLZDRIVER_LIBS} ${DBDRIVER_LIBS} @LIBS@
 
 NOSYMLIBS =	${LWRESLIBS} ${DNSLIBS} ${BIND9LIBS} \
 		${ISCCFGLIBS} ${ISCCCLIBS} ${ISCNOSYMLIBS} \
+		${ISCPK11LIBS} \
 		${DLZDRIVER_LIBS} ${DBDRIVER_LIBS} @LIBS@
 
 SUBDIRS =	unix
@@ -106,7 +112,7 @@ GEOIPLINKSRCS = geoip.c
 SRCS =		builtin.c client.c config.c control.c \
 		controlconf.c @GEOIPLINKSRCS@ interfacemgr.c \
 		listenlist.c log.c logconf.c main.c notify.c \
-		query.c server.c sortlist.c statschannel.c symtbl.c symtbl-empty.c \
+		query.c server.c sortlist.c statschannel.c \
 		tkeyconf.c tsigconf.c update.c xfrout.c \
 		zoneconf.c \
 		lwaddr.c lwresd.c lwdclient.c lwderror.c lwdgabn.c \
@@ -129,6 +135,7 @@ main.@O@: main.c
 		-DSRCID=\"${SRCID}\" \
 		-DBUILDTIME=\"$$(date +%Y-%m-%d.%H:%M:%S%z)\" \
 		-DCONFIGARGS="\"${CONFIGARGS}\"" \
+		-DBUILDER="\"make\"" \
 		-DNS_LOCALSTATEDIR=\"${localstatedir}\" \
 		-DNS_SYSCONFDIR=\"${sysconfdir}\" -c ${srcdir}/main.c
 

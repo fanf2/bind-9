@@ -199,6 +199,7 @@ options {
         pid-file ( <quoted_string> | none );
         port <integer>;
         preferred-glue <string>;
+        prefetch <integer> [ <integer> ];
         provide-ixfr <boolean>;
         query-source <querysource4>;
         query-source-v6 <querysource6>;
@@ -446,6 +447,7 @@ view <string> <optional_class> {
         notify-to-soa <boolean>;
         nsec3-test-zone <boolean>; // test only
         preferred-glue <string>;
+        prefetch <integer> [ <integer> ];
         provide-ixfr <boolean>;
         query-source <querysource4>;
         query-source-v6 <querysource6>;

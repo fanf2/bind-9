@@ -1,4 +1,4 @@
-# Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2004-2014  Internet Systems Consortium, Inc. ("ISC")
 # Copyright (C) 1998-2003  Internet Software Consortium.
 #
 # Permission to use, copy, modify, and/or distribute this software for any
@@ -23,12 +23,14 @@ top_srcdir =	@top_srcdir@
 
 @LIBISC_API@
 
+@BIND9_MAKE_INCLUDES@
+
 CINCLUDES =	-I${srcdir}/unix/include \
 		-I${srcdir}/@ISC_THREAD_DIR@/include \
 		-I${srcdir}/@ISC_ARCH_DIR@/include \
 		-I./include \
-		-I${srcdir}/include @ISC_OPENSSL_INC@
-CDEFINES =	@USE_OPENSSL@
+		-I${srcdir}/include ${ISCPK11_INCLUDES} @ISC_OPENSSL_INC@
+CDEFINES =	@CRYPTO@
 CWARNINGS =
 
 # Alphabetically
@@ -64,7 +66,8 @@ OBJS =		@ISC_EXTRA_OBJS@ \
 		rwlock.@O@ \
 		safe.@O@ serial.@O@ sha1.@O@ sha2.@O@ sockaddr.@O@ stats.@O@ \
 		string.@O@ strtoul.@O@ symtab.@O@ task.@O@ taskpool.@O@ \
-		timer.@O@ version.@O@ ${UNIXOBJS} ${NLSOBJS} ${THREADOBJS}
+		tm.@O@ timer.@O@ version.@O@ \
+		${UNIXOBJS} ${NLSOBJS} ${THREADOBJS}
 SYMTBLOBJS =	backtrace-emptytbl.@O@
 
 # Alphabetically
@@ -79,8 +82,8 @@ SRCS =		@ISC_EXTRA_SRCS@ \
 		parseint.c portset.c quota.c radix.c random.c \
 		ratelimiter.c refcount.c region.c regex.c result.c rwlock.c \
 		safe.c serial.c sha1.c sha2.c sockaddr.c stats.c string.c \
-		strtoul.c symtab.c symtbl-empty.c task.c taskpool.c timer.c \
-		version.c
+		strtoul.c symtab.c task.c taskpool.c timer.c \
+		tm.c version.c
 
 LIBS =		@LIBS@
 
