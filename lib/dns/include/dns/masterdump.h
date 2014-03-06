@@ -104,7 +104,7 @@ typedef struct dns_master_style dns_master_style_t;
 #define	DNS_STYLEFLAG_NOCRYPTO		0x08000000U
 
 /*% Print TTL with friendly units. */
-#define	DNS_STYLEFLAG_TTL_UNITS		0x10000000U
+#define	DNS_STYLEFLAG_TTL_UNITS		0x20000000U
 
 ISC_LANG_BEGINDECLS
 
