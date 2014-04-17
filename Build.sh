@@ -22,7 +22,7 @@ echo ==
 echo ==  $(date +%Y-%m-%d.%H:%M:%S%z) $PREFIX start
 echo ==
 
-PATH_OpenSSL=/opt/OpenSSL-1.0.1f+0
+PATH_OpenSSL=/opt/OpenSSL-1.0.1g+0
 
 export PYTHON=/opt/python-2.7.6+0/bin/python2.7
 
